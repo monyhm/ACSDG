@@ -1,0 +1,221 @@
+#==============================================================================
+# sensor_params.yaml — All ACSDG hardware sensor parameters in one file.
+#
+# Set use_real_hardware: true for any sensor to switch that node from
+# Gazebo simulation to the physical hardware driver.  Downstream topic
+# names are UNCHANGED in either mode.
+#==============================================================================
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ECHODYNE ECHOGUARD PHASED-ARRAY RADAR
+# 6 instances placed on sensor posts (hexagon r=150 m)
+# Real specs: range 1000 m, FOV 120°×80°, 25 Hz, range σ=0.5 m
+# ─────────────────────────────────────────────────────────────────────────────
+echoguard_1:
+  ros__parameters:
+    use_real_hardware: false
+    sensor_id: 1
+    frame_id: "echoguard_1"
+    detection_range: 1000.0
+    # Sensor post 0: angle=0°  → (150, 0, 1.5)
+    sensor_x: 150.0
+    sensor_y: 0.0
+    sensor_z: 1.5
+    sensor_yaw: 3.1416          # faces inward (toward origin)
+    hw_host: "192.168.10.11"
+    hw_port: 5555
+
+echoguard_2:
+  ros__parameters:
+    use_real_hardware: false
+    sensor_id: 2
+    frame_id: "echoguard_2"
+    detection_range: 1000.0
+    # Sensor post 1: angle=60° → (75, 129.9, 1.5)
+    sensor_x: 75.0
+    sensor_y: 129.9
+    sensor_z: 1.5
+    sensor_yaw: -2.6180         # faces inward (240° CCW from East)
+    hw_host: "192.168.10.12"
+    hw_port: 5555
+
+echoguard_3:
+  ros__parameters:
+    use_real_hardware: false
+    sensor_id: 3
+    frame_id: "echoguard_3"
+    detection_range: 1000.0
+    # Sensor post 2: angle=120° → (-75, 129.9, 1.5)
+    sensor_x: -75.0
+    sensor_y: 129.9
+    sensor_z: 1.5
+    sensor_yaw: -1.5708         # faces inward (270° CCW from East)
+    hw_host: "192.168.10.13"
+    hw_port: 5555
+
+echoguard_4:
+  ros__parameters:
+    use_real_hardware: false
+    sensor_id: 4
+    frame_id: "echoguard_4"
+    detection_range: 1000.0
+    # Sensor post 3: angle=180° → (-150, 0, 1.5)
+    sensor_x: -150.0
+    sensor_y: 0.0
+    sensor_z: 1.5
+    sensor_yaw: 0.0             # faces inward (East = toward origin)
+    hw_host: "192.168.10.14"
+    hw_port: 5555
+
+echoguard_5:
+  ros__parameters:
+    use_real_hardware: false
+    sensor_id: 5
+    frame_id: "echoguard_5"
+    detection_range: 1000.0
+    # Sensor post 4: angle=240° → (-75, -129.9, 1.5)
+    sensor_x: -75.0
+    sensor_y: -129.9
+    sensor_z: 1.5
+    sensor_yaw: 0.5236          # faces inward
+    hw_host: "192.168.10.15"
+    hw_port: 5555
+
+echoguard_6:
+  ros__parameters:
+    use_real_hardware: false
+    sensor_id: 6
+    frame_id: "echoguard_6"
+    detection_range: 1000.0
+    # Sensor post 5: angle=300° → (75, -129.9, 1.5)
+    sensor_x: 75.0
+    sensor_y: -129.9
+    sensor_z: 1.5
+    sensor_yaw: 1.5708          # faces inward
+    hw_host: "192.168.10.16"
+    hw_port: 5555
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DEDRONE RF-360 RF DIRECTION FINDER
+# 4 instances placed on defense posts (corners r≈250 m)
+# Real specs: range 2000 m, DF accuracy ±5°, 1 Hz, REST API port 9090
+# ─────────────────────────────────────────────────────────────────────────────
+rf360_1:
+  ros__parameters:
+    use_real_hardware: false
+    sensor_id: 1
+    frame_id: "rf360_1"
+    detection_range: 2000.0
+    df_accuracy_deg: 5.0
+    # Defense post NE: (177, 177, 3)
+    sensor_x: 177.0
+    sensor_y: 177.0
+    sensor_z: 3.0
+    hw_host: "192.168.10.21"
+    hw_port: 9090
+
+rf360_2:
+  ros__parameters:
+    use_real_hardware: false
+    sensor_id: 2
+    frame_id: "rf360_2"
+    detection_range: 2000.0
+    df_accuracy_deg: 5.0
+    # Defense post NW: (-177, 177, 3)
+    sensor_x: -177.0
+    sensor_y: 177.0
+    sensor_z: 3.0
+    hw_host: "192.168.10.22"
+    hw_port: 9090
+
+rf360_3:
+  ros__parameters:
+    use_real_hardware: false
+    sensor_id: 3
+    frame_id: "rf360_3"
+    detection_range: 2000.0
+    df_accuracy_deg: 5.0
+    # Defense post SE: (177, -177, 3)
+    sensor_x: 177.0
+    sensor_y: -177.0
+    sensor_z: 3.0
+    hw_host: "192.168.10.23"
+    hw_port: 9090
+
+rf360_4:
+  ros__parameters:
+    use_real_hardware: false
+    sensor_id: 4
+    frame_id: "rf360_4"
+    detection_range: 2000.0
+    df_accuracy_deg: 5.0
+    # Defense post SW: (-177, -177, 3)
+    sensor_x: -177.0
+    sensor_y: -177.0
+    sensor_z: 3.0
+    hw_host: "192.168.10.24"
+    hw_port: 9090
+
+# ─────────────────────────────────────────────────────────────────────────────
+# FLIR BOSON+ 640 THERMAL CAMERA
+# 4 instances placed on guard towers (corners of base compound)
+# Real specs: 640×512, 50°×40° FOV, 60 Hz, NETD <20 mK
+# ─────────────────────────────────────────────────────────────────────────────
+boson_1:
+  ros__parameters:
+    use_real_hardware: false
+    sensor_id: 1
+    frame_id: "boson_1"
+    fov_deg: 50.0
+    v4l2_device: 0
+    # Guard tower NE: (190, 190, 13)
+    sensor_x: 190.0
+    sensor_y: 190.0
+    sensor_z: 13.0
+
+boson_2:
+  ros__parameters:
+    use_real_hardware: false
+    sensor_id: 2
+    frame_id: "boson_2"
+    fov_deg: 50.0
+    v4l2_device: 1
+    # Guard tower NW: (-190, 190, 13)
+    sensor_x: -190.0
+    sensor_y: 190.0
+    sensor_z: 13.0
+
+boson_3:
+  ros__parameters:
+    use_real_hardware: false
+    sensor_id: 3
+    frame_id: "boson_3"
+    fov_deg: 50.0
+    v4l2_device: 2
+    # Guard tower SE: (190, -190, 13)
+    sensor_x: 190.0
+    sensor_y: -190.0
+    sensor_z: 13.0
+
+boson_4:
+  ros__parameters:
+    use_real_hardware: false
+    sensor_id: 4
+    frame_id: "boson_4"
+    fov_deg: 50.0
+    v4l2_device: 3
+    # Guard tower SW: (-190, -190, 13)
+    sensor_x: -190.0
+    sensor_y: -190.0
+    sensor_z: 13.0
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SENSOR FUSION
+# ─────────────────────────────────────────────────────────────────────────────
+sensor_fusion_node:
+  ros__parameters:
+    assoc_gate_m: 15.0
+    drop_age_s: 2.0
+    weight_radar: 0.60
+    weight_rf: 0.25
+    weight_thermal: 0.15

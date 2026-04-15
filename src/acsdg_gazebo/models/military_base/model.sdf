@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sdf version="1.9">
+  <!-- Standalone includable base compound — included by the world SDF. -->
+  <!-- When included, all models are merged into the world as statics.  -->
+  <model name="military_base_compound">
+    <static>true</static>
+    <pose>0 0 0 0 0 0</pose>
+    <!-- Content is embedded directly in military_base.sdf for clarity.  -->
+    <!-- This model.sdf exists as a named asset for include references.  -->
+    <link name="placeholder">
+      <visual name="vis">
+        <geometry><sphere><radius>0.001</radius></sphere></geometry>
+      </visual>
+    </link>
+  </model>
+</sdf>

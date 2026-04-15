@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  EchoGuard Phased-Array Radar Model
+  Physical: 160 mm × 160 mm × 55 mm, 1.25 kg
+  Mounts on top of sensor posts (hexagon r=150 m).
+  Attach EchoGuardRadarPlugin to each instance with a unique sensor_id.
+-->
+<sdf version="1.9">
+  <model name="echoguard">
+    <static>true</static>
+
+    <link name="base_link">
+      <!-- Main radar face plate -->
+      <collision name="col_body">
+        <geometry>
+          <box><size>0.16 0.16 0.055</size></box>
+        </geometry>
+      </collision>
+      <visual name="vis_body">
+        <geometry>
+          <box><size>0.16 0.16 0.055</size></box>
+        </geometry>
+        <material>
+          <!-- Dark gunmetal grey — EchoGuard housing colour -->
+          <ambient>0.18 0.18 0.20 1</ambient>
+          <diffuse>0.18 0.18 0.20 1</diffuse>
+          <specular>0.30 0.30 0.32 1</specular>
+        </material>
+      </visual>
+
+      <!-- Antenna array face (slightly lighter panel on front) -->
+      <visual name="vis_antenna_face">
+        <pose>0 0.081 0 0 0 0</pose>
+        <geometry>
+          <box><size>0.14 0.002 0.045</size></box>
+        </geometry>
+        <material>
+          <ambient>0.25 0.27 0.30 1</ambient>
+          <diffuse>0.25 0.27 0.30 1</diffuse>
+        </material>
+      </visual>
+
+      <!-- Mounting bracket (short stem below the unit) -->
+      <visual name="vis_mount">
+        <pose>0 0 -0.04 0 0 0</pose>
+        <geometry>
+          <box><size>0.04 0.04 0.025</size></box>
+        </geometry>
+        <material>
+          <ambient>0.30 0.30 0.30 1</ambient>
+          <diffuse>0.30 0.30 0.30 1</diffuse>
+        </material>
+      </visual>
+
+      <!-- Status LED (green dot) -->
+      <visual name="vis_led">
+        <pose>0.06 0.082 0.015 0 0 0</pose>
+        <geometry>
+          <sphere><radius>0.004</radius></sphere>
+        </geometry>
+        <material>
+          <ambient>0.0 1.0 0.2 1</ambient>
+          <diffuse>0.0 1.0 0.2 1</diffuse>
+          <emissive>0.0 0.8 0.1 1</emissive>
+        </material>
+      </visual>
+    </link>
+
+    <!--
+      EchoGuardRadarPlugin — included here as a template.
+      Each world instance overrides sensor_id via <plugin> in the world SDF
+      include block.  The update_rate matches the real EchoGuard spec (25 Hz).
+    -->
+    <plugin filename="echoguard_radar_plugin"
+            name="acsdg_sensors_hw::EchoGuardRadarPlugin">
+      <sensor_id>0</sensor_id>       <!-- overridden per instance -->
+      <update_rate>25.0</update_rate>
+    </plugin>
+
+  </model>
+</sdf>

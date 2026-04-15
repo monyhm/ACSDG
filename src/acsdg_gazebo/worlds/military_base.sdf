@@ -1,0 +1,727 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sdf version="1.9">
+  <world name="military_base">
+
+    <!-- ── Physics ─────────────────────────────────────────────────────── -->
+    <physics type="ode">
+      <max_step_size>0.004</max_step_size>
+      <real_time_factor>1.0</real_time_factor>
+      <real_time_update_rate>250</real_time_update_rate>
+    </physics>
+    <gravity>0 0 -9.81</gravity>
+    <magnetic_field>6e-06 2.3e-05 -4.2e-05</magnetic_field>
+    <atmosphere type="adiabatic"/>
+
+    <!-- ── Required plugins ───────────────────────────────────────────── -->
+    <plugin filename="gz-sim-physics-system"
+      name="gz::sim::systems::Physics"/>
+    <plugin filename="gz-sim-user-commands-system"
+      name="gz::sim::systems::UserCommands"/>
+    <plugin filename="gz-sim-scene-broadcaster-system"
+      name="gz::sim::systems::SceneBroadcaster"/>
+    <plugin filename="gz-sim-contact-system"
+      name="gz::sim::systems::Contact"/>
+    <plugin filename="gz-sim-sensors-system"
+      name="gz::sim::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+    </plugin>
+
+    <!-- ── Scene / Lighting ───────────────────────────────────────────── -->
+    <scene>
+      <ambient>0.6 0.55 0.45 1</ambient>
+      <background>0.53 0.71 0.87 1</background>
+      <shadows>true</shadows>
+      <grid>false</grid>
+    </scene>
+
+    <light name="sun" type="directional">
+      <pose>0 0 500 0 0.3 0.785</pose>
+      <diffuse>1.0 0.95 0.85 1</diffuse>
+      <specular>0.3 0.28 0.25 1</specular>
+      <direction>-0.5 0.3 -0.8</direction>
+      <cast_shadows>true</cast_shadows>
+    </light>
+
+    <!-- Ambient fill light -->
+    <light name="ambient_fill" type="directional">
+      <pose>0 0 100 0 -0.3 -0.785</pose>
+      <diffuse>0.3 0.35 0.45 1</diffuse>
+      <specular>0 0 0 1</specular>
+      <direction>0.5 -0.3 -0.6</direction>
+      <cast_shadows>false</cast_shadows>
+    </light>
+
+    <!-- ── Ground plane (desert/sand) ────────────────────────────────── -->
+    <model name="ground_plane">
+      <static>true</static>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <plane>
+              <normal>0 0 1</normal>
+              <size>2000 2000</size>
+            </plane>
+          </geometry>
+          <surface>
+            <friction><ode><mu>0.8</mu><mu2>0.8</mu2></ode></friction>
+          </surface>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <plane>
+              <normal>0 0 1</normal>
+              <size>2000 2000</size>
+            </plane>
+          </geometry>
+          <material>
+            <ambient>0.72 0.62 0.45 1</ambient>
+            <diffuse>0.72 0.62 0.45 1</diffuse>
+            <specular>0.1 0.09 0.07 1</specular>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ════════════════════════════════════════════════════════════════ -->
+    <!-- MILITARY BASE COMPOUND                                           -->
+    <!-- ════════════════════════════════════════════════════════════════ -->
+
+    <!-- ── Perimeter walls (400m × 400m, 3m high) ────────────────────── -->
+    <!-- North wall -->
+    <model name="wall_north">
+      <static>true</static>
+      <pose>0 200 1.5 0 0 0</pose>
+      <link name="link">
+        <collision name="col"><geometry><box><size>400 1 3</size></box></geometry></collision>
+        <visual name="vis">
+          <geometry><box><size>400 1 3</size></box></geometry>
+          <material>
+            <ambient>0.55 0.52 0.48 1</ambient>
+            <diffuse>0.55 0.52 0.48 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- South wall -->
+    <model name="wall_south">
+      <static>true</static>
+      <pose>0 -200 1.5 0 0 0</pose>
+      <link name="link">
+        <collision name="col"><geometry><box><size>400 1 3</size></box></geometry></collision>
+        <visual name="vis">
+          <geometry><box><size>400 1 3</size></box></geometry>
+          <material><ambient>0.55 0.52 0.48 1</ambient><diffuse>0.55 0.52 0.48 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- East wall -->
+    <model name="wall_east">
+      <static>true</static>
+      <pose>200 0 1.5 0 0 0</pose>
+      <link name="link">
+        <collision name="col"><geometry><box><size>1 400 3</size></box></geometry></collision>
+        <visual name="vis">
+          <geometry><box><size>1 400 3</size></box></geometry>
+          <material><ambient>0.55 0.52 0.48 1</ambient><diffuse>0.55 0.52 0.48 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- West wall -->
+    <model name="wall_west">
+      <static>true</static>
+      <pose>-200 0 1.5 0 0 0</pose>
+      <link name="link">
+        <collision name="col"><geometry><box><size>1 400 3</size></box></geometry></collision>
+        <visual name="vis">
+          <geometry><box><size>1 400 3</size></box></geometry>
+          <material><ambient>0.55 0.52 0.48 1</ambient><diffuse>0.55 0.52 0.48 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ── Main central building (40m × 40m × 15m) ───────────────────── -->
+    <model name="main_building">
+      <static>true</static>
+      <pose>0 0 7.5 0 0 0</pose>
+      <link name="link">
+        <collision name="col"><geometry><box><size>40 40 15</size></box></geometry></collision>
+        <visual name="vis">
+          <geometry><box><size>40 40 15</size></box></geometry>
+          <material>
+            <ambient>0.50 0.48 0.44 1</ambient>
+            <diffuse>0.50 0.48 0.44 1</diffuse>
+            <specular>0.05 0.05 0.05 1</specular>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Roof detail: flat slab -->
+    <model name="main_building_roof">
+      <static>true</static>
+      <pose>0 0 15.3 0 0 0</pose>
+      <link name="link">
+        <visual name="vis">
+          <geometry><box><size>42 42 0.6</size></box></geometry>
+          <material><ambient>0.4 0.38 0.35 1</ambient><diffuse>0.4 0.38 0.35 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ── Corner guard towers (8m × 8m × 12m) ──────────────────────── -->
+    <model name="tower_ne">
+      <static>true</static>
+      <pose>190 190 6 0 0 0</pose>
+      <link name="link">
+        <collision name="col"><geometry><box><size>8 8 12</size></box></geometry></collision>
+        <visual name="vis">
+          <geometry><box><size>8 8 12</size></box></geometry>
+          <material><ambient>0.52 0.50 0.46 1</ambient><diffuse>0.52 0.50 0.46 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tower_nw">
+      <static>true</static>
+      <pose>-190 190 6 0 0 0</pose>
+      <link name="link">
+        <collision name="col"><geometry><box><size>8 8 12</size></box></geometry></collision>
+        <visual name="vis">
+          <geometry><box><size>8 8 12</size></box></geometry>
+          <material><ambient>0.52 0.50 0.46 1</ambient><diffuse>0.52 0.50 0.46 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tower_se">
+      <static>true</static>
+      <pose>190 -190 6 0 0 0</pose>
+      <link name="link">
+        <collision name="col"><geometry><box><size>8 8 12</size></box></geometry></collision>
+        <visual name="vis">
+          <geometry><box><size>8 8 12</size></box></geometry>
+          <material><ambient>0.52 0.50 0.46 1</ambient><diffuse>0.52 0.50 0.46 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="tower_sw">
+      <static>true</static>
+      <pose>-190 -190 6 0 0 0</pose>
+      <link name="link">
+        <collision name="col"><geometry><box><size>8 8 12</size></box></geometry></collision>
+        <visual name="vis">
+          <geometry><box><size>8 8 12</size></box></geometry>
+          <material><ambient>0.52 0.50 0.46 1</ambient><diffuse>0.52 0.50 0.46 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ── Radar tower at center (cylinder r=2m, h=20m) ──────────────── -->
+    <model name="radar_tower_base">
+      <static>true</static>
+      <pose>0 0 10 0 0 0</pose>
+      <link name="link">
+        <collision name="col">
+          <geometry><cylinder><radius>2</radius><length>20</length></cylinder></geometry>
+        </collision>
+        <visual name="vis">
+          <geometry><cylinder><radius>2</radius><length>20</length></cylinder></geometry>
+          <material><ambient>0.3 0.32 0.35 1</ambient><diffuse>0.3 0.32 0.35 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Radar dish -->
+    <model name="radar_dish">
+      <static>true</static>
+      <pose>0 0 21 0 1.5707 0</pose>
+      <link name="link">
+        <visual name="vis">
+          <geometry><cylinder><radius>3</radius><length>0.3</length></cylinder></geometry>
+          <material><ambient>0.6 0.6 0.65 1</ambient><diffuse>0.6 0.6 0.65 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ── Runway / parade ground (marked strip) ─────────────────────── -->
+    <model name="parade_ground">
+      <static>true</static>
+      <pose>0 -80 0.01 0 0 0</pose>
+      <link name="link">
+        <visual name="vis">
+          <geometry><box><size>80 100 0.02</size></box></geometry>
+          <material><ambient>0.42 0.40 0.37 1</ambient><diffuse>0.42 0.40 0.37 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Runway centre line markings -->
+    <model name="runway_line_1">
+      <static>true</static>
+      <pose>0 -80 0.02 0 0 0</pose>
+      <link name="link">
+        <visual name="vis">
+          <geometry><box><size>2 90 0.01</size></box></geometry>
+          <material><ambient>0.9 0.9 0.85 1</ambient><diffuse>0.9 0.9 0.85 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ════════════════════════════════════════════════════════════════ -->
+    <!-- SENSOR POSTS — hexagon at r=150m                               -->
+    <!-- ════════════════════════════════════════════════════════════════ -->
+
+    <!-- Sensor 0: angle=0° → (150, 0) -->
+    <model name="sensor_post_0">
+      <static>true</static>
+      <pose>150 0 0.75 0 0 0</pose>
+      <link name="link">
+        <collision name="col"><geometry><box><size>2 2 1.5</size></box></geometry></collision>
+        <visual name="vis">
+          <geometry><box><size>2 2 1.5</size></box></geometry>
+          <material><ambient>0.4 0.42 0.45 1</ambient><diffuse>0.4 0.42 0.45 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+    <model name="sensor_antenna_0">
+      <static>true</static>
+      <pose>150 0 3.5 0 0 0</pose>
+      <link name="link">
+        <visual name="vis">
+          <geometry><cylinder><radius>0.05</radius><length>4</length></cylinder></geometry>
+          <material><ambient>0.7 0.7 0.7 1</ambient><diffuse>0.7 0.7 0.7 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Sensor 1: angle=60° → (75, 129.9) -->
+    <model name="sensor_post_1">
+      <static>true</static>
+      <pose>75 129.9 0.75 0 0 0</pose>
+      <link name="link">
+        <collision name="col"><geometry><box><size>2 2 1.5</size></box></geometry></collision>
+        <visual name="vis">
+          <geometry><box><size>2 2 1.5</size></box></geometry>
+          <material><ambient>0.4 0.42 0.45 1</ambient><diffuse>0.4 0.42 0.45 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+    <model name="sensor_antenna_1">
+      <static>true</static>
+      <pose>75 129.9 3.5 0 0 0</pose>
+      <link name="link">
+        <visual name="vis">
+          <geometry><cylinder><radius>0.05</radius><length>4</length></cylinder></geometry>
+          <material><ambient>0.7 0.7 0.7 1</ambient><diffuse>0.7 0.7 0.7 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Sensor 2: angle=120° → (-75, 129.9) -->
+    <model name="sensor_post_2">
+      <static>true</static>
+      <pose>-75 129.9 0.75 0 0 0</pose>
+      <link name="link">
+        <collision name="col"><geometry><box><size>2 2 1.5</size></box></geometry></collision>
+        <visual name="vis">
+          <geometry><box><size>2 2 1.5</size></box></geometry>
+          <material><ambient>0.4 0.42 0.45 1</ambient><diffuse>0.4 0.42 0.45 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+    <model name="sensor_antenna_2">
+      <static>true</static>
+      <pose>-75 129.9 3.5 0 0 0</pose>
+      <link name="link">
+        <visual name="vis">
+          <geometry><cylinder><radius>0.05</radius><length>4</length></cylinder></geometry>
+          <material><ambient>0.7 0.7 0.7 1</ambient><diffuse>0.7 0.7 0.7 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Sensor 3: angle=180° → (-150, 0) -->
+    <model name="sensor_post_3">
+      <static>true</static>
+      <pose>-150 0 0.75 0 0 0</pose>
+      <link name="link">
+        <collision name="col"><geometry><box><size>2 2 1.5</size></box></geometry></collision>
+        <visual name="vis">
+          <geometry><box><size>2 2 1.5</size></box></geometry>
+          <material><ambient>0.4 0.42 0.45 1</ambient><diffuse>0.4 0.42 0.45 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+    <model name="sensor_antenna_3">
+      <static>true</static>
+      <pose>-150 0 3.5 0 0 0</pose>
+      <link name="link">
+        <visual name="vis">
+          <geometry><cylinder><radius>0.05</radius><length>4</length></cylinder></geometry>
+          <material><ambient>0.7 0.7 0.7 1</ambient><diffuse>0.7 0.7 0.7 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Sensor 4: angle=240° → (-75, -129.9) -->
+    <model name="sensor_post_4">
+      <static>true</static>
+      <pose>-75 -129.9 0.75 0 0 0</pose>
+      <link name="link">
+        <collision name="col"><geometry><box><size>2 2 1.5</size></box></geometry></collision>
+        <visual name="vis">
+          <geometry><box><size>2 2 1.5</size></box></geometry>
+          <material><ambient>0.4 0.42 0.45 1</ambient><diffuse>0.4 0.42 0.45 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+    <model name="sensor_antenna_4">
+      <static>true</static>
+      <pose>-75 -129.9 3.5 0 0 0</pose>
+      <link name="link">
+        <visual name="vis">
+          <geometry><cylinder><radius>0.05</radius><length>4</length></cylinder></geometry>
+          <material><ambient>0.7 0.7 0.7 1</ambient><diffuse>0.7 0.7 0.7 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Sensor 5: angle=300° → (75, -129.9) -->
+    <model name="sensor_post_5">
+      <static>true</static>
+      <pose>75 -129.9 0.75 0 0 0</pose>
+      <link name="link">
+        <collision name="col"><geometry><box><size>2 2 1.5</size></box></geometry></collision>
+        <visual name="vis">
+          <geometry><box><size>2 2 1.5</size></box></geometry>
+          <material><ambient>0.4 0.42 0.45 1</ambient><diffuse>0.4 0.42 0.45 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+    <model name="sensor_antenna_5">
+      <static>true</static>
+      <pose>75 -129.9 3.5 0 0 0</pose>
+      <link name="link">
+        <visual name="vis">
+          <geometry><cylinder><radius>0.05</radius><length>4</length></cylinder></geometry>
+          <material><ambient>0.7 0.7 0.7 1</ambient><diffuse>0.7 0.7 0.7 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ════════════════════════════════════════════════════════════════ -->
+    <!-- DEFENSE POSTS — corners at r=250m                              -->
+    <!-- ════════════════════════════════════════════════════════════════ -->
+
+    <!-- Defense post NE: (177, 177) -->
+    <model name="defense_post_ne">
+      <static>true</static>
+      <pose>177 177 1.5 0 0 0</pose>
+      <link name="link">
+        <collision name="col"><geometry><box><size>6 6 3</size></box></geometry></collision>
+        <visual name="vis">
+          <geometry><box><size>6 6 3</size></box></geometry>
+          <material><ambient>0.35 0.40 0.35 1</ambient><diffuse>0.35 0.40 0.35 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+    <!-- Launch rail marker NE -->
+    <model name="launch_rail_ne">
+      <static>true</static>
+      <pose>177 177 4.5 0 -0.52 0.785</pose>
+      <link name="link">
+        <visual name="vis">
+          <geometry><cylinder><radius>0.15</radius><length>4</length></cylinder></geometry>
+          <material><ambient>0.6 0.6 0.3 1</ambient><diffuse>0.6 0.6 0.3 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Defense post NW: (-177, 177) -->
+    <model name="defense_post_nw">
+      <static>true</static>
+      <pose>-177 177 1.5 0 0 0</pose>
+      <link name="link">
+        <collision name="col"><geometry><box><size>6 6 3</size></box></geometry></collision>
+        <visual name="vis">
+          <geometry><box><size>6 6 3</size></box></geometry>
+          <material><ambient>0.35 0.40 0.35 1</ambient><diffuse>0.35 0.40 0.35 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+    <model name="launch_rail_nw">
+      <static>true</static>
+      <pose>-177 177 4.5 0 -0.52 2.356</pose>
+      <link name="link">
+        <visual name="vis">
+          <geometry><cylinder><radius>0.15</radius><length>4</length></cylinder></geometry>
+          <material><ambient>0.6 0.6 0.3 1</ambient><diffuse>0.6 0.6 0.3 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Defense post SE: (177, -177) -->
+    <model name="defense_post_se">
+      <static>true</static>
+      <pose>177 -177 1.5 0 0 0</pose>
+      <link name="link">
+        <collision name="col"><geometry><box><size>6 6 3</size></box></geometry></collision>
+        <visual name="vis">
+          <geometry><box><size>6 6 3</size></box></geometry>
+          <material><ambient>0.35 0.40 0.35 1</ambient><diffuse>0.35 0.40 0.35 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+    <model name="launch_rail_se">
+      <static>true</static>
+      <pose>177 -177 4.5 0 -0.52 -0.785</pose>
+      <link name="link">
+        <visual name="vis">
+          <geometry><cylinder><radius>0.15</radius><length>4</length></cylinder></geometry>
+          <material><ambient>0.6 0.6 0.3 1</ambient><diffuse>0.6 0.6 0.3 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Defense post SW: (-177, -177) -->
+    <model name="defense_post_sw">
+      <static>true</static>
+      <pose>-177 -177 1.5 0 0 0</pose>
+      <link name="link">
+        <collision name="col"><geometry><box><size>6 6 3</size></box></geometry></collision>
+        <visual name="vis">
+          <geometry><box><size>6 6 3</size></box></geometry>
+          <material><ambient>0.35 0.40 0.35 1</ambient><diffuse>0.35 0.40 0.35 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+    <model name="launch_rail_sw">
+      <static>true</static>
+      <pose>-177 -177 4.5 0 -0.52 -2.356</pose>
+      <link name="link">
+        <visual name="vis">
+          <geometry><cylinder><radius>0.15</radius><length>4</length></cylinder></geometry>
+          <material><ambient>0.6 0.6 0.3 1</ambient><diffuse>0.6 0.6 0.3 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ════════════════════════════════════════════════════════════════ -->
+    <!-- DRONE SPAWN POSITIONS (populated by gazebo.launch.py at runtime)-->
+    <!-- Interceptor drones at defense posts, enemy drones at perimeter  -->
+    <!-- ════════════════════════════════════════════════════════════════ -->
+
+    <!-- Interceptor 1 at defense post NE -->
+    <include>
+      <uri>model://interceptor_drone</uri>
+      <name>interceptor_1</name>
+      <pose>177 177 5 0 0 0</pose>
+    </include>
+
+    <!-- Interceptor 2 at defense post NW -->
+    <include>
+      <uri>model://interceptor_drone</uri>
+      <name>interceptor_2</name>
+      <pose>-177 177 5 0 0 0</pose>
+    </include>
+
+    <!-- Interceptor 3 at defense post SE -->
+    <include>
+      <uri>model://interceptor_drone</uri>
+      <name>interceptor_3</name>
+      <pose>177 -177 5 0 0 0</pose>
+    </include>
+
+    <!-- Interceptor 4 at defense post SW -->
+    <include>
+      <uri>model://interceptor_drone</uri>
+      <name>interceptor_4</name>
+      <pose>-177 -177 5 0 0 0</pose>
+    </include>
+
+    <!-- Enemy drones at perimeter (r=300m, evenly spaced 90° apart) -->
+    <include>
+      <uri>model://enemy_drone</uri>
+      <name>enemy_1</name>
+      <pose>300 0 30 0 0 3.14159</pose>
+    </include>
+
+    <include>
+      <uri>model://enemy_drone</uri>
+      <name>enemy_2</name>
+      <pose>0 300 30 0 0 3.14159</pose>
+    </include>
+
+    <include>
+      <uri>model://enemy_drone</uri>
+      <name>enemy_3</name>
+      <pose>-300 0 30 0 0 0</pose>
+    </include>
+
+    <include>
+      <uri>model://enemy_drone</uri>
+      <name>enemy_4</name>
+      <pose>0 -300 30 0 0 0</pose>
+    </include>
+
+    <!-- ════════════════════════════════════════════════════════════════ -->
+    <!-- ECHODYNE ECHOGUARD RADAR — 6 instances on sensor posts          -->
+    <!-- Hexagon r=150 m,  one per post,  each faces inward (toward 0,0) -->
+    <!-- ════════════════════════════════════════════════════════════════ -->
+
+    <!-- Post 0: angle=0°  → (150, 0).  Yaw=π so +Y faces origin. -->
+    <include>
+      <uri>model://echoguard</uri>
+      <name>echoguard_1</name>
+      <pose>150 0 1.555 0 0 3.1416</pose>
+      <plugin filename="echoguard_radar_plugin"
+              name="acsdg_sensors_hw::EchoGuardRadarPlugin">
+        <sensor_id>1</sensor_id>
+        <update_rate>25.0</update_rate>
+      </plugin>
+    </include>
+
+    <!-- Post 1: angle=60° → (75, 129.9).  Yaw = π + π/3 = 4π/3 -->
+    <include>
+      <uri>model://echoguard</uri>
+      <name>echoguard_2</name>
+      <pose>75 129.9 1.555 0 0 -2.6180</pose>
+      <plugin filename="echoguard_radar_plugin"
+              name="acsdg_sensors_hw::EchoGuardRadarPlugin">
+        <sensor_id>2</sensor_id>
+        <update_rate>25.0</update_rate>
+      </plugin>
+    </include>
+
+    <!-- Post 2: angle=120° → (-75, 129.9).  Yaw = π + 2π/3 = 5π/3 -->
+    <include>
+      <uri>model://echoguard</uri>
+      <name>echoguard_3</name>
+      <pose>-75 129.9 1.555 0 0 -1.5708</pose>
+      <plugin filename="echoguard_radar_plugin"
+              name="acsdg_sensors_hw::EchoGuardRadarPlugin">
+        <sensor_id>3</sensor_id>
+        <update_rate>25.0</update_rate>
+      </plugin>
+    </include>
+
+    <!-- Post 3: angle=180° → (-150, 0).  Yaw = 0 (faces East = origin) -->
+    <include>
+      <uri>model://echoguard</uri>
+      <name>echoguard_4</name>
+      <pose>-150 0 1.555 0 0 0</pose>
+      <plugin filename="echoguard_radar_plugin"
+              name="acsdg_sensors_hw::EchoGuardRadarPlugin">
+        <sensor_id>4</sensor_id>
+        <update_rate>25.0</update_rate>
+      </plugin>
+    </include>
+
+    <!-- Post 4: angle=240° → (-75, -129.9).  Yaw = π/3 -->
+    <include>
+      <uri>model://echoguard</uri>
+      <name>echoguard_5</name>
+      <pose>-75 -129.9 1.555 0 0 0.5236</pose>
+      <plugin filename="echoguard_radar_plugin"
+              name="acsdg_sensors_hw::EchoGuardRadarPlugin">
+        <sensor_id>5</sensor_id>
+        <update_rate>25.0</update_rate>
+      </plugin>
+    </include>
+
+    <!-- Post 5: angle=300° → (75, -129.9).  Yaw = 2π/3 -->
+    <include>
+      <uri>model://echoguard</uri>
+      <name>echoguard_6</name>
+      <pose>75 -129.9 1.555 0 0 1.5708</pose>
+      <plugin filename="echoguard_radar_plugin"
+              name="acsdg_sensors_hw::EchoGuardRadarPlugin">
+        <sensor_id>6</sensor_id>
+        <update_rate>25.0</update_rate>
+      </plugin>
+    </include>
+
+    <!-- ════════════════════════════════════════════════════════════════ -->
+    <!-- DEDRONE RF-360 — 4 instances on defense posts (corners r≈250 m) -->
+    <!-- ════════════════════════════════════════════════════════════════ -->
+
+    <include>
+      <uri>model://rf360</uri>
+      <name>rf360_1</name>
+      <pose>177 177 3.255 0 0 0</pose>
+      <plugin filename="rf360_plugin" name="acsdg_sensors_hw::RF360Plugin">
+        <sensor_id>1</sensor_id>
+        <update_rate>1.0</update_rate>
+      </plugin>
+    </include>
+
+    <include>
+      <uri>model://rf360</uri>
+      <name>rf360_2</name>
+      <pose>-177 177 3.255 0 0 0</pose>
+      <plugin filename="rf360_plugin" name="acsdg_sensors_hw::RF360Plugin">
+        <sensor_id>2</sensor_id>
+        <update_rate>1.0</update_rate>
+      </plugin>
+    </include>
+
+    <include>
+      <uri>model://rf360</uri>
+      <name>rf360_3</name>
+      <pose>177 -177 3.255 0 0 0</pose>
+      <plugin filename="rf360_plugin" name="acsdg_sensors_hw::RF360Plugin">
+        <sensor_id>3</sensor_id>
+        <update_rate>1.0</update_rate>
+      </plugin>
+    </include>
+
+    <include>
+      <uri>model://rf360</uri>
+      <name>rf360_4</name>
+      <pose>-177 -177 3.255 0 0 0</pose>
+      <plugin filename="rf360_plugin" name="acsdg_sensors_hw::RF360Plugin">
+        <sensor_id>4</sensor_id>
+        <update_rate>1.0</update_rate>
+      </plugin>
+    </include>
+
+    <!-- ════════════════════════════════════════════════════════════════ -->
+    <!-- FLIR BOSON+ 640 — 4 instances on guard towers (compound corners) -->
+    <!-- Towers are at ±190 m, height 12 m → sensor at z≈13 m           -->
+    <!-- Each Boson faces inward (45° toward base centre)                -->
+    <!-- ════════════════════════════════════════════════════════════════ -->
+
+    <include>
+      <uri>model://boson_camera</uri>
+      <name>boson_1</name>
+      <!-- Tower NE (190, 190), face SW: yaw = -3π/4 -->
+      <pose>190 190 13 0 -0.26 -2.3562</pose>
+    </include>
+
+    <include>
+      <uri>model://boson_camera</uri>
+      <name>boson_2</name>
+      <!-- Tower NW (-190, 190), face SE: yaw = -π/4 -->
+      <pose>-190 190 13 0 -0.26 -0.7854</pose>
+    </include>
+
+    <include>
+      <uri>model://boson_camera</uri>
+      <name>boson_3</name>
+      <!-- Tower SE (190, -190), face NW: yaw = 3π/4 -->
+      <pose>190 -190 13 0 -0.26 2.3562</pose>
+    </include>
+
+    <include>
+      <uri>model://boson_camera</uri>
+      <name>boson_4</name>
+      <!-- Tower SW (-190, -190), face NE: yaw = π/4 -->
+      <pose>-190 -190 13 0 -0.26 0.7854</pose>
+    </include>
+
+  </world>
+</sdf>

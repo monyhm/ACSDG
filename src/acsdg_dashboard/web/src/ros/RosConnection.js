@@ -1,0 +1,86 @@
+/**
+ * RosConnection.js — Singleton roslib connection manager.
+ *
+ * Usage:
+ *   import { subscribe, publish, connectionStatus } from './ros/RosConnection';
+ *   const unsub = subscribe('/topic', 'std_msgs/String', (msg) => { ... });
+ *   unsub(); // unsubscribe
+ */
+
+import ROSLIB from 'roslib';
+
+const ROS_URL = 'ws://localhost:9090';
+
+// ── Singleton state ──────────────────────────────────────────────────────────
+
+let ros = null;
+let statusCallbacks = [];
+let _status = 'DISCONNECTED';
+
+function setStatus(s) {
+  _status = s;
+  statusCallbacks.forEach(cb => cb(s));
+}
+
+function connect() {
+  if (ros) {
+    try { ros.close(); } catch (_) {}
+  }
+
+  ros = new ROSLIB.Ros({ url: ROS_URL });
+
+  ros.on('connection', () => {
+    console.log('[ROS] Connected to', ROS_URL);
+    setStatus('CONNECTED');
+  });
+
+  ros.on('error', (err) => {
+    console.warn('[ROS] Error:', err);
+    setStatus('ERROR');
+  });
+
+  ros.on('close', () => {
+    console.warn('[ROS] Disconnected — reconnecting in 3s');
+    setStatus('DISCONNECTED');
+    setTimeout(connect, 3000);
+  });
+}
+
+connect();
+
+// ── Public API ────────────────────────────────────────────────────────────────
+
+/**
+ * Subscribe to a ROS topic.
+ * @returns unsubscribe function
+ */
+export function subscribe(topic, type, callback) {
+  const listener = new ROSLIB.Topic({
+    ros,
+    name: topic,
+    messageType: type,
+    throttle_rate: 50,
+  });
+  listener.subscribe(callback);
+  return () => listener.unsubscribe();
+}
+
+/**
+ * Publish a single message to a ROS topic.
+ */
+export function publish(topic, type, msgData) {
+  const pub = new ROSLIB.Topic({ ros, name: topic, messageType: type });
+  pub.publish(new ROSLIB.Message(msgData));
+}
+
+/**
+ * Register a callback that fires whenever connection status changes.
+ * @returns unregister function
+ */
+export function onStatusChange(cb) {
+  statusCallbacks.push(cb);
+  cb(_status);
+  return () => { statusCallbacks = statusCallbacks.filter(f => f !== cb); };
+}
+
+export function getStatus() { return _status; }

@@ -1,0 +1,38 @@
+# PX4 SITL parameters for ACSDG multi-drone simulation.
+# Applied per-instance via: px4 -s etc/init.d-posix/rcS -i <ID>
+
+# ── Flight controller ─────────────────────────────────────────────────────────
+MC_ROLLRATE_P: 0.15
+MC_PITCHRATE_P: 0.15
+MC_YAWRATE_P: 0.2
+MC_ROLL_P: 6.5
+MC_PITCH_P: 6.5
+MC_YAW_P: 2.8
+
+# ── Position controller ───────────────────────────────────────────────────────
+MPC_XY_P: 0.95
+MPC_Z_P: 1.0
+MPC_XY_VEL_P_ACC: 1.8
+MPC_Z_VEL_P_ACC: 4.0
+MPC_XY_CRUISE: 12.0      # Cruising speed m/s (interceptor)
+MPC_XY_VEL_MAX: 15.0     # Max horizontal speed m/s
+MPC_Z_VEL_MAX_UP: 5.0
+MPC_Z_VEL_MAX_DN: 3.0
+
+# ── MAVLink / SITL ────────────────────────────────────────────────────────────
+MAV_TYPE: 2               # Quadrotor
+SYS_AUTOSTART: 4001       # Generic quadcopter
+COM_RCL_EXCEPT: 4         # No RC loss failsafe in SITL
+NAV_DLL_ACT: 0            # No datalink loss action
+NAV_RCL_ACT: 0            # No RC loss action
+
+# ── Battery simulation ────────────────────────────────────────────────────────
+BAT1_N_CELLS: 4
+BAT1_V_CHARGED: 4.2
+BAT1_V_EMPTY: 3.5
+BAT1_CAPACITY: 5200       # mAh
+SIM_BAT_DRAIN: 0          # Disable battery drain in SITL
+
+# ── EKF2 ─────────────────────────────────────────────────────────────────────
+EKF2_AID_MASK: 1          # GPS only
+EKF2_HGT_MODE: 0          # Barometric height

@@ -1,0 +1,6 @@
+uint32 wave_number
+uint32 drones_detected
+uint32 drones_neutralized
+uint32 drones_breached
+float32 cost_saved
+float32 avg_response_time_ms

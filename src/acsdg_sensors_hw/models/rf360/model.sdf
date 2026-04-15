@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Dedrone RF-360 RF Direction-Finding Sensor Model
+  Physical: cylinder ~0.30 m diameter × 0.25 m height, 7.0 kg
+  Mounted on defense posts (corners r=250 m) on the base perimeter.
+-->
+<sdf version="1.9">
+  <model name="rf360">
+    <static>true</static>
+
+    <link name="base_link">
+      <!-- Main cylindrical enclosure -->
+      <collision name="col_body">
+        <geometry>
+          <cylinder><radius>0.15</radius><length>0.25</length></cylinder>
+        </geometry>
+      </collision>
+      <visual name="vis_body">
+        <geometry>
+          <cylinder><radius>0.15</radius><length>0.25</length></cylinder>
+        </geometry>
+        <material>
+          <!-- Off-white / light grey — Dedrone RF-360 housing -->
+          <ambient>0.88 0.88 0.85 1</ambient>
+          <diffuse>0.88 0.88 0.85 1</diffuse>
+          <specular>0.15 0.15 0.15 1</specular>
+        </material>
+      </visual>
+
+      <!-- Top cap (slightly darker) -->
+      <visual name="vis_top_cap">
+        <pose>0 0 0.128 0 0 0</pose>
+        <geometry>
+          <cylinder><radius>0.152</radius><length>0.006</length></cylinder>
+        </geometry>
+        <material>
+          <ambient>0.70 0.70 0.68 1</ambient>
+          <diffuse>0.70 0.70 0.68 1</diffuse>
+        </material>
+      </visual>
+
+      <!-- Bottom flange / mounting plate -->
+      <visual name="vis_flange">
+        <pose>0 0 -0.13 0 0 0</pose>
+        <geometry>
+          <cylinder><radius>0.18</radius><length>0.012</length></cylinder>
+        </geometry>
+        <material>
+          <ambient>0.55 0.55 0.52 1</ambient>
+          <diffuse>0.55 0.55 0.52 1</diffuse>
+        </material>
+      </visual>
+
+      <!-- PoE Ethernet connector detail -->
+      <visual name="vis_connector">
+        <pose>0.155 0 -0.06 0 0 0</pose>
+        <geometry>
+          <box><size>0.020 0.030 0.020</size></box>
+        </geometry>
+        <material>
+          <ambient>0.20 0.20 0.20 1</ambient>
+          <diffuse>0.20 0.20 0.20 1</diffuse>
+        </material>
+      </visual>
+
+      <!-- Status LED ring (blue stripe) -->
+      <visual name="vis_led_ring">
+        <pose>0 0 0.11 0 0 0</pose>
+        <geometry>
+          <cylinder><radius>0.151</radius><length>0.008</length></cylinder>
+        </geometry>
+        <material>
+          <ambient>0.1 0.4 0.9 1</ambient>
+          <diffuse>0.1 0.4 0.9 1</diffuse>
+          <emissive>0.05 0.2 0.6 1</emissive>
+        </material>
+      </visual>
+    </link>
+
+    <plugin filename="rf360_plugin"
+            name="acsdg_sensors_hw::RF360Plugin">
+      <sensor_id>1</sensor_id>       <!-- overridden per instance -->
+      <update_rate>1.0</update_rate>
+    </plugin>
+
+  </model>
+</sdf>
