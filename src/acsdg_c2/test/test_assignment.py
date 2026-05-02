@@ -1,7 +1,5 @@
 """Tests for the assignment module — currently a thin wrapper on hungarian()."""
 
-import math
-
 from acsdg_c2.assignment import assign
 
 
