@@ -58,7 +58,7 @@ class Anvil(WeaponSystem):
     def mark_idle(self) -> None:
         self._engaged_target_id = None
 
-    def engaged_target_id(self):  # Optional[int]
+    def engaged_target_id(self) -> Optional[int]:
         """The track id this weapon is currently engaging, or None if available."""
         return self._engaged_target_id
 
@@ -106,10 +106,14 @@ class Anvil(WeaponSystem):
 
     def dispatch(self, track: Track) -> Dict[str, Any]:
         self.mark_engaged(track.track_id)
+        # Truncating int(...) matches the legacy c2_engine_node priority byte
+        # exactly (see legacy line ~195) — round() would diverge by one ULP at
+        # the half-byte boundary, breaking byte-for-byte regression with the
+        # pre-refactor demo.
         return {
             "target_id": track.track_id,
             "weapon_id": self.weapon_id,
-            "priority": int(min(255, max(0, round(track.threat_score * 255)))),
+            "priority": int(min(255, max(0, int(track.threat_score * 255)))),
         }
 
     def state(self) -> WeaponState:
