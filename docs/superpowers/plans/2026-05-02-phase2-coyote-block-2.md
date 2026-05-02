@@ -418,13 +418,15 @@ Create `src/acsdg_gazebo/models/coyote_b2/model.sdf`:
       </velocity_decay>
       <inertial>
         <mass>7.0</mass>
-        <!-- Long-cylinder approximation: m=7, length=1.0 m, radius=0.075 m
-             ixx = iyy ≈ m*(3*r² + L²)/12 = 7*(3*0.0056 + 1.0)/12 ≈ 0.59
-             izz ≈ m*r²/2 = 7*0.0056/2 ≈ 0.020 -->
+        <!-- Long-cylinder approximation, long axis along +x (matches the
+             1.0 × 0.15 × 0.15 collision box and the rotated visual cylinder):
+               ixx ≈ m*r²/2 = 7*0.005625/2 ≈ 0.020      (axial — about long axis)
+               iyy = izz ≈ m*(3*r² + L²)/12             (transverse)
+                        = 7*(3*0.005625 + 1.0)/12 ≈ 0.59 -->
         <inertia>
-          <ixx>0.59</ixx><ixy>0</ixy><ixz>0</ixz>
+          <ixx>0.020</ixx><ixy>0</ixy><ixz>0</ixz>
           <iyy>0.59</iyy><iyz>0</iyz>
-          <izz>0.020</izz>
+          <izz>0.59</izz>
         </inertia>
       </inertial>
 
