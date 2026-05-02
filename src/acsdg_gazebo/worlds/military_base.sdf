@@ -519,32 +519,35 @@
     <!-- Interceptor drones at defense posts, enemy drones at perimeter  -->
     <!-- ════════════════════════════════════════════════════════════════ -->
 
-    <!-- Interceptor 1 at defense post NE -->
+    <!-- Interceptor 1 at defense post NE
+         Spawn z bumped from 5 to 20 to match interceptor_controller_node's
+         home_z parameter and to clear ground-collision impulses that were
+         tipping the bodies on startup. -->
     <include>
       <uri>model://interceptor_drone</uri>
       <name>interceptor_1</name>
-      <pose>177 177 5 0 0 0</pose>
+      <pose>177 177 20 0 0 0</pose>
     </include>
 
     <!-- Interceptor 2 at defense post NW -->
     <include>
       <uri>model://interceptor_drone</uri>
       <name>interceptor_2</name>
-      <pose>-177 177 5 0 0 0</pose>
+      <pose>-177 177 20 0 0 0</pose>
     </include>
 
     <!-- Interceptor 3 at defense post SE -->
     <include>
       <uri>model://interceptor_drone</uri>
       <name>interceptor_3</name>
-      <pose>177 -177 5 0 0 0</pose>
+      <pose>177 -177 20 0 0 0</pose>
     </include>
 
     <!-- Interceptor 4 at defense post SW -->
     <include>
       <uri>model://interceptor_drone</uri>
       <name>interceptor_4</name>
-      <pose>-177 -177 5 0 0 0</pose>
+      <pose>-177 -177 20 0 0 0</pose>
     </include>
 
     <!-- Enemy drones at perimeter (r=300m, evenly spaced 90° apart) -->

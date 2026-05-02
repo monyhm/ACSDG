@@ -44,13 +44,17 @@ class BridgeShim(Node):
         self._gz_pubs:  dict = {}
         self._ros_pubs: dict = {}
 
-        # Cached yaw per model name (from incoming odometry) — used to
-        # convert world-frame ROS Twist into body-frame for Gazebo's
-        # VelocityControl plugin.  Enemies spawn with yaw=π (1,2) or 0
-        # (3,4); interceptors spawn with yaw=0.  Without this rotation,
-        # enemies 1 and 2 fly in the wrong direction.
-        self._yaw: dict = {}
-        self._yaw_lock = threading.Lock()
+        # Cached body orientation per model (qx, qy, qz, qw) from incoming
+        # odometry. gz-sim-velocity-control-system applies cmd_vel in BODY
+        # frame; controllers and enemy_driver publish in WORLD frame. We
+        # use the FULL quaternion (not just yaw) so the rotation is correct
+        # even when the body has rolled/pitched off-axis — which happens in
+        # this sim because nothing physically constrains body orientation
+        # despite cmd_vel.angular always being (0,0,0). With the full
+        # rotation, body's center-of-mass translates correctly in world
+        # regardless of whatever orientation physics has put it in.
+        self._quat: dict = {}    # model -> (qx, qy, qz, qw)
+        self._quat_lock = threading.Lock()
 
         # Per-drone bindings for both enemies and interceptors
         self._wire_twist_ros_to_gz('enemy',       ENEMY_COUNT)
@@ -79,18 +83,44 @@ class BridgeShim(Node):
                 lambda msg, t=gz_topic, m=model: self._forward_twist(msg, t, m), 10)
 
     def _forward_twist(self, msg: Twist, gz_topic: str, model: str) -> None:
-        # gz-sim-velocity-control-system applies cmd_vel in WORLD frame in
-        # Harmonic — no rotation needed. Earlier versions of this shim
-        # rotated by cached yaw assuming body-frame; once the body started
-        # tumbling (no rotational damping with gravity off), that rotation
-        # became actively wrong and interceptors drifted to z=2km.
+        # gz-sim-velocity-control-system applies cmd_vel in BODY frame
+        # (verified against gz-sim8 source — no world-frame SDF option,
+        # plugin writes LinearVelocityCmd directly without any rotation).
+        # The controller / enemy_driver publish in WORLD frame, so this shim
+        # must inverse-rotate by the body's current orientation before
+        # forwarding. Using the full quaternion (not just yaw) means the
+        # transform stays correct even if the body has rolled or pitched —
+        # which happens in this sim because nothing physically clamps body
+        # orientation, despite cmd_vel.angular always being (0,0,0).
+        #
+        # We also force angular to zero on the forwarded twist as a defense
+        # in depth: the body should NEVER receive a non-zero angular cmd in
+        # this project (drones translate without yawing/pitching), and
+        # zeroing here protects against any future caller mistakenly
+        # publishing one.
+        with self._quat_lock:
+            qx, qy, qz, qw = self._quat.get(model, (0.0, 0.0, 0.0, 1.0))
+        vx, vy, vz = msg.linear.x, msg.linear.y, msg.linear.z
+
+        # v_body = R(q)^T × v_world  (transpose of body→world rotation)
+        # Standard quaternion-to-rotation-matrix transposed.
+        bx = ((1.0 - 2.0*(qy*qy + qz*qz)) * vx
+              + 2.0*(qx*qy + qz*qw) * vy
+              + 2.0*(qx*qz - qy*qw) * vz)
+        by = (2.0*(qx*qy - qz*qw) * vx
+              + (1.0 - 2.0*(qx*qx + qz*qz)) * vy
+              + 2.0*(qy*qz + qx*qw) * vz)
+        bz = (2.0*(qx*qz + qy*qw) * vx
+              + 2.0*(qy*qz - qx*qw) * vy
+              + (1.0 - 2.0*(qx*qx + qy*qy)) * vz)
+
         gz = GzTwist()
-        gz.linear.x  = msg.linear.x
-        gz.linear.y  = msg.linear.y
-        gz.linear.z  = msg.linear.z
-        gz.angular.x = msg.angular.x
-        gz.angular.y = msg.angular.y
-        gz.angular.z = msg.angular.z
+        gz.linear.x  = bx
+        gz.linear.y  = by
+        gz.linear.z  = bz
+        gz.angular.x = 0.0
+        gz.angular.y = 0.0
+        gz.angular.z = 0.0
         self._gz_pubs[gz_topic].publish(gz)
 
     # ── Odometry: Gazebo → ROS ─────────────────────────────────────────
@@ -107,11 +137,18 @@ class BridgeShim(Node):
                 self.get_logger().error(f'Failed to subscribe gz topic {topic}')
 
     def _forward_odom(self, gz: GzOdometry, ros_topic: str, model: str) -> None:
-        # Cache yaw for the world→body rotation used by _forward_twist.
-        # yaw = 2 * atan2(qz, qw) when roll and pitch are ≈0.
-        with self._yaw_lock:
-            self._yaw[model] = 2.0 * math.atan2(
-                gz.pose.orientation.z, gz.pose.orientation.w)
+        # Cache the full orientation quaternion (not just yaw) for the
+        # world→body rotation in _forward_twist. The simple yaw extraction
+        # `2*atan2(qz, qw)` only works when roll and pitch are ≈0 — which
+        # they aren't in practice here (numerical drift puts non-zero
+        # roll/pitch on the bodies despite zero commanded angular velocity).
+        with self._quat_lock:
+            self._quat[model] = (
+                gz.pose.orientation.x,
+                gz.pose.orientation.y,
+                gz.pose.orientation.z,
+                gz.pose.orientation.w,
+            )
         ros_msg = Odometry()
         ros_msg.header.stamp    = self.get_clock().now().to_msg()
         ros_msg.header.frame_id = 'world'
