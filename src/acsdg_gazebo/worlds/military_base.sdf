@@ -519,13 +519,13 @@
     <!-- Interceptor drones at defense posts, enemy drones at perimeter  -->
     <!-- ════════════════════════════════════════════════════════════════ -->
 
-    <!-- Interceptor 1 at defense post NE
-         Spawn z bumped from 5 to 20 to match interceptor_controller_node's
-         home_z parameter and to clear ground-collision impulses that were
-         tipping the bodies on startup. -->
+    <!-- Coyote 1 at defense post NE — replaces interceptor_1 in Phase 2.
+         Same NE post (177, 177, 20) so the C2 weapon registry's slot-0
+         entry takes the same spatial position; only the airframe class
+         changes. The post becomes the Coyote's tube-launch site. -->
     <include>
-      <uri>model://interceptor_drone</uri>
-      <name>interceptor_1</name>
+      <uri>model://coyote_b2</uri>
+      <name>coyote_1</name>
       <pose>177 177 20 0 0 0</pose>
     </include>
 
