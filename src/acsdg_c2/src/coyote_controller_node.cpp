@@ -8,10 +8,9 @@
 //
 // Publishes
 // ---------
-//   /coyote_{id}/cmd_vel         geometry_msgs/Twist
-//   /interceptors/unit_{id}/state  acsdg_msgs/InterceptorState
+//   /coyote_{id}/cmd_vel             geometry_msgs/Twist
 //   /interceptors/unit_{id}/position geometry_msgs/Point
-//   /mission/engagement_ack      std_msgs/String
+//   /mission/engagement_ack          std_msgs/String
 //
 // Subscribes
 // ----------
@@ -41,9 +40,12 @@ class CoyoteControllerNode : public rclcpp::Node
   // ── Coyote spec values (spec §6.2) ──────────────────────────────────
   static constexpr double kMaxSpeed     = 160.0;  // m/s — Mach 0.45 sustained
   static constexpr double kKillRadius   = 5.0;    // m — frag p≥0.5 (spec §6.2)
-  static constexpr double kArmDistance  = 100.0;  // m — proximity fuze arms here
   static constexpr int    kLostTicks    = 40;     // 40 × 50 ms = 2 s
   static constexpr double kDt           = 0.05;   // 20 Hz
+  // Spec §6.2 also lists a 100 m proximity-fuze arming distance. Phase 2
+  // doesn't enforce it (kill check fires regardless of distance from
+  // launcher). Phase 3 base-class refactor should add `is_armed(range)`
+  // as a virtual hook so each weapon's arming rule is uniform.
   // No fixed cruise altitude — Coyote pursues in 3D directly. Anvil's 2D-
   // pursuit + altitude-hold pattern was needed because radar-noisy tgt_vz
   // extrapolated over 10 s+ t_go was unstable; Coyote's 160 m/s closes
