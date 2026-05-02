@@ -108,6 +108,31 @@ If `range > 8m` you're back to phantom tracks — check that `rf_node` is off (`
 
 End-of-session live verification: 4 interceptors NEUTRALISED 4 enemies at ranges 7.82–7.95 m (within HANDOFF baseline 6.81–8.0 m), zero breaches.
 
+## What changed in session 2026-05-02 (continued — Phase 2)
+
+**Phase 2 of the AI-orchestrated heterogeneous-defense upgrade.** Plan at `docs/superpowers/plans/2026-05-02-phase2-coyote-block-2.md`. Replaces the NE Anvil with a Raytheon Coyote Block 2 frag-warhead jet, exercising the WeaponSystem ABC end-to-end (different speed class, different kill radius, different controller).
+
+**Inventory (Phase 2):** 1 × Coyote Block 2 at slot 0 (NE post) + 3 × Anvils at slots 1–3 (NW/SE/SW). Weapon registration in `c2_engine_node.py` `__init__`. Phase 1 was 4 × Anvils.
+
+1. **Coyote weapon class** (`acsdg_c2/acsdg_c2/weapons/coyote.py`). Concrete `WeaponSystem` subclass — `max_speed=160 m/s` (Mach 0.45 sustained), `max_range=5000 m` (sim cap, real Block 2 is ~10 km), `min_range=100 m` (booster-clear), `max_alt=4500 m`, `resource_cost=0.10`, frag `kill_radius_p50=5 m`. Pkill table {SMALL_QUAD: 0.60, GROUP_1: 0.85, GROUP_3: 0.95, SHAHED: 0.95}. 12 unit tests + closing-rate t_go credit test. Spec §6.2.
+2. **Coyote SDF model** (`acsdg_gazebo/models/coyote_b2/model.sdf`). 7 kg cylindrical jet airframe, +x long axis. Inertia tensor: `ixx=0.020 (axial), iyy=izz=0.59 (transverse)` — Phase 2 Task 2 polish swapped these from the initial cylinder-along-z values after reviewer flagged the axis mismatch. Uses `gz-sim-velocity-control-system` + `gz-sim-odometry-publisher-system` with `<dimensions>3</dimensions>` (same plugin set as Anvil).
+3. **World spawn** (`worlds/military_base.sdf`). `coyote_1` replaces `interceptor_1` at NE post `(177, 177, 20)`. Note: `_DEFAULT_HOMES` in `c2_engine_node.py` uses `(±200, ±200, 20)` while the SDF uses `(±177, ±177, 20)` — diagonal-distance vs side-length convention divergence inherited from Phase 1. Tracked as Phase-2 reviewer M-2 (cosmetic; the controller reads its real position from odometry).
+4. **Bridge shim wiring** (`acsdg_gazebo/scripts/gz_bridge_shim.py`). `_BRIDGED_MODELS` adds `('coyote', 1)`. `interceptor` count stays at 4 (not 3) because `range(1, count+1)` walks instances 1..N, so dropping to 3 would mis-wire the surviving slots 2..4. The unused interceptor_1 slot is harmless — gz-transport advertise/subscribe with no peers is a no-op. See in-file comment.
+5. **Coyote C++ controller** (`acsdg_c2/src/coyote_controller_node.cpp`). Per-Coyote 20 Hz controller modelled on `interceptor_controller_node.cpp` but Coyote-specific: `kMaxSpeed=160 m/s`, `kKillRadius=5.0 m` (frag-fuze), 3D pursuit (no fixed cruise altitude — Coyote closes in 5–10 s so noisy `tgt_vz` doesn't have time to diverge over `t_go`), `[FRAG-FUZE]` log tag on kills. Subscribes to `/coyote_<id>/cmd_vel`, `/model/coyote_<id>/odometry`. Publishes `/interceptors/unit_<id>/position`, `/mission/engagement_ack`. **No mavros_msgs dependency** — earlier draft tried to use mavros types and failed to build; final form uses only standard ROS message types.
+6. **Launch wiring** (`acsdg_c2/launch/c2.launch.py`). `COYOTE_SLOT = 1` constant; conditional spawn — `coyote_controller_node` for slot 1, `interceptor_controller_node` for slots 2–4. Both controllers subscribe to the same `/c2/engagement_orders` and filter by `interceptor_id`.
+7. **C2 engine inventory** (`acsdg_c2/acsdg_c2/c2_engine_node.py`). Imports `Coyote` alongside `Anvil`. `_weapons` list registers `Coyote(weapon_id="coyote_0", home=NE)` + 3 Anvils. Dispatcher's numeric-tail logic maps `coyote_0` → `interceptor_id=1`, preserving the legacy C++ controller's subscription pattern. Inventory printed at startup.
+
+**Phase 2 live demo (end of session):**
+- `Coyote #1: NEUTRALISED target #1 at range=2.27m [FRAG-FUZE]` — Coyote engaged at order, flew (200, 200, 20) → (293, 2, 33) ≈ 210 m + 13 m vertical in 1.7 s ≈ 140 m/s avg, demonstrating the 160 m/s Mach-0.45 capability.
+- 3 × Anvil kills at 7.51 m, 7.92 m, 6.91 m — within HANDOFF baseline.
+- 1 × wave-stacked Coyote re-kill at 1.37 m proximity-fuze.
+- 5 NEUTRALISED total, 0 BREACHED.
+
+**Open Phase-2 reviewer items (left for Phase 3):**
+- M-1: Coyote integration test (currently only unit tests + live demo).
+- M-2: SDF/_DEFAULT_HOMES ±177 vs ±200 reconciliation.
+- I-2 regression test, weapon_id→interceptor_id explicit registry, WeaponControllerBase refactor before DroneHunter, kill-by-other-weapon race, lead-point t_go clamp, `releaseTarget()` helper, `is_armed(range)` hook, DispatchOrder dataclass, multi-shot `is_available` semantics, `WeaponState.engaged_target_id` field. Tracked in todo list.
+
 ## Auto-memory checkpoint
 
 The latest checkpoint lives at `~/.claude/projects/-home-mal/memory/project_acsdg_status.md` and reflects this end-of-session state. Future Claude Code sessions in `~/` will load it automatically.
