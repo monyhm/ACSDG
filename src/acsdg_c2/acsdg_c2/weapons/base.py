@@ -8,7 +8,7 @@ engagement envelope, Pkill curve, resource model, and dispatch behavior.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from acsdg_c2.weapons.types import (
     TargetClass,
@@ -62,3 +62,14 @@ class WeaponSystem(ABC):
     @abstractmethod
     def state(self) -> WeaponState:
         """Snapshot for visualization and AI decisions."""
+
+    @abstractmethod
+    def engaged_target_id(self) -> Optional[int]:
+        """Track id this weapon is currently engaging, or None if available.
+
+        Used by the C2 engine's dispatch loop to dedupe — a track already
+        being engaged by some weapon is excluded from re-assignment. For
+        one-shot kinetic weapons (Anvil, Coyote) this is a single id; for
+        multi-shot weapons (Skyranger, DroneHunter post-recovery) Phase 4
+        will need richer semantics — see Phase 2 plan TODOs.
+        """

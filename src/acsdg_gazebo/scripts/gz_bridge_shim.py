@@ -20,7 +20,16 @@ Gazebo Harmonic). It handles:
 """
 
 import math
+import os
+import sys
 import threading
+
+# Make the sibling bridge_math module importable regardless of how this
+# script is launched (directly, via colcon symlink-install, or as the ROS 2
+# entry point). Both files install into lib/${PROJECT_NAME}/ side-by-side.
+_HERE = os.path.dirname(os.path.realpath(__file__))
+if _HERE not in sys.path:
+    sys.path.insert(0, _HERE)
 
 import rclpy
 from rclpy.node import Node
@@ -30,6 +39,8 @@ from nav_msgs.msg import Odometry
 from gz.transport13 import Node as GzNode
 from gz.msgs10.twist_pb2 import Twist as GzTwist
 from gz.msgs10.odometry_pb2 import Odometry as GzOdometry
+
+from bridge_math import world_to_body_velocity
 
 
 ENEMY_COUNT       = 4
@@ -100,19 +111,11 @@ class BridgeShim(Node):
         # publishing one.
         with self._quat_lock:
             qx, qy, qz, qw = self._quat.get(model, (0.0, 0.0, 0.0, 1.0))
-        vx, vy, vz = msg.linear.x, msg.linear.y, msg.linear.z
 
-        # v_body = R(q)^T × v_world  (transpose of body→world rotation)
-        # Standard quaternion-to-rotation-matrix transposed.
-        bx = ((1.0 - 2.0*(qy*qy + qz*qz)) * vx
-              + 2.0*(qx*qy + qz*qw) * vy
-              + 2.0*(qx*qz - qy*qw) * vz)
-        by = (2.0*(qx*qy - qz*qw) * vx
-              + (1.0 - 2.0*(qx*qx + qz*qz)) * vy
-              + 2.0*(qy*qz + qx*qw) * vz)
-        bz = (2.0*(qx*qz + qy*qw) * vx
-              + 2.0*(qy*qz - qx*qw) * vy
-              + (1.0 - 2.0*(qx*qx + qy*qy)) * vz)
+        bx, by, bz = world_to_body_velocity(
+            qx, qy, qz, qw,
+            msg.linear.x, msg.linear.y, msg.linear.z,
+        )
 
         gz = GzTwist()
         gz.linear.x  = bx

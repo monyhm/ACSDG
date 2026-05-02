@@ -1,6 +1,5 @@
 """Tests for threat priority scoring — must match the legacy _score()."""
 
-import math
 import pytest
 
 from acsdg_c2.cost_function.threat_priority import score_threat

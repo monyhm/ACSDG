@@ -15,5 +15,10 @@ install(PROGRAMS scripts/enemy_driver_node.py
 install(PROGRAMS scripts/gz_bridge_shim.py
   DESTINATION lib/${PROJECT_NAME}
   RENAME gz_bridge_shim)
+# Pure-math helper imported by gz_bridge_shim at runtime; sits beside it
+# on the install path so the script's __file__-relative sys.path lookup
+# can find it regardless of launch context.
+install(FILES scripts/bridge_math.py
+  DESTINATION lib/${PROJECT_NAME})
 
 ament_package()
