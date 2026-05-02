@@ -32,15 +32,15 @@ from acsdg_c2.assignment import assign
 from acsdg_c2.classifier import Classifier
 from acsdg_c2.cost_function import build_cost_matrix, score_threat
 from acsdg_c2.dispatcher import Dispatcher
-from acsdg_c2.weapons import Anvil, Track
+from acsdg_c2.weapons import Anvil, Coyote, Track, WeaponSystem
 
 NUM_INTERCEPTORS = 4
 
 _DEFAULT_HOMES = [
-    (-100.0, -100.0, 20.0),
-    ( 100.0, -100.0, 20.0),
-    ( 100.0,  100.0, 20.0),
-    (-100.0,  100.0, 20.0),
+    ( 200.0,  200.0, 20.0),    # slot 1 — NE (Coyote in Phase 2, Anvil in Phase 1)
+    (-200.0,  200.0, 20.0),    # slot 2 — NW (Anvil)
+    ( 200.0, -200.0, 20.0),    # slot 3 — SE (Anvil)
+    (-200.0, -200.0, 20.0),    # slot 4 — SW (Anvil)
 ]
 
 
@@ -49,10 +49,18 @@ class C2EngineNode(Node):
     def __init__(self) -> None:
         super().__init__("c2_engine_node")
 
-        # -- Weapons (Phase 1: 4 Anvils) --
-        self._weapons: List[Anvil] = [
-            Anvil(weapon_id=f"anvil_{i}", home_position=_DEFAULT_HOMES[i])
-            for i in range(NUM_INTERCEPTORS)
+        # ── Weapons (Phase 2: 1 Coyote + 3 Anvils) ──────────────────────
+        # Slot 0 (NE corner) is a Raytheon Coyote Block 2 frag-jet. Slots 1-3
+        # are Anduril Anvil quadcopters. Both classes implement the same
+        # WeaponSystem ABC so the dispatch loop is uniform.
+        # weapon_id naming: "coyote_0" maps via Dispatcher's numeric-tail
+        # logic to interceptor_id 1 (the legacy NE slot). Anvil 1-3 keep
+        # their previous mappings (anvil_1 → 2, anvil_2 → 3, anvil_3 → 4).
+        self._weapons: List[WeaponSystem] = [
+            Coyote(weapon_id="coyote_0", home_position=_DEFAULT_HOMES[0]),
+            Anvil(weapon_id="anvil_1",   home_position=_DEFAULT_HOMES[1]),
+            Anvil(weapon_id="anvil_2",   home_position=_DEFAULT_HOMES[2]),
+            Anvil(weapon_id="anvil_3",   home_position=_DEFAULT_HOMES[3]),
         ]
 
         # -- Modules --
@@ -84,8 +92,12 @@ class C2EngineNode(Node):
 
         # -- 10 Hz control loop --
         self.create_timer(0.1, self._on_timer)
+        # Build a human-readable inventory summary so the launch log makes
+        # it obvious what classes the C2 is composing this run.
+        inventory = ", ".join(f"{w.__class__.__name__}({w.weapon_id})"
+                              for w in self._weapons)
         self.get_logger().info(
-            f"C2EngineNode ready (10 Hz, {NUM_INTERCEPTORS} Anvils)")
+            f"C2EngineNode ready (10 Hz, {len(self._weapons)} weapons: {inventory})")
 
     def _on_targets(self, msg: String) -> None:
         try:
