@@ -43,8 +43,20 @@ from gz.msgs10.odometry_pb2 import Odometry as GzOdometry
 from bridge_math import world_to_body_velocity
 
 
-ENEMY_COUNT       = 4
-INTERCEPTOR_COUNT = 4
+# Models bridged on cmd_vel + odometry, as (kind, count) tuples. The bridge
+# wires `/{kind}_{1..count}/cmd_vel` (ROS) ↔ `/model/{kind}_{i}/cmd_vel` (gz)
+# for every kind. Phase 1 had only enemy + interceptor; Phase 2 adds the
+# Coyote at slot 1 alongside the remaining 3 Anvils (so interceptor_count
+# is now 3, not 4 — interceptor_1 is gone, replaced by coyote_1).
+_BRIDGED_MODELS = (
+    ('enemy',       4),    # enemy_1..4 still all 4 Anvils' targets
+    ('interceptor', 4),    # interceptor_1..4 — interceptor_1 is no longer
+                           # spawned by the world (replaced by coyote_1),
+                           # but we keep the topic wiring in case a stray
+                           # cmd_vel publisher targets unit 1; bridge to
+                           # a non-existent gz model is harmless (no-op).
+    ('coyote',      1),    # coyote_1 — new in Phase 2
+)
 
 
 class BridgeShim(Node):
@@ -67,15 +79,15 @@ class BridgeShim(Node):
         self._quat: dict = {}    # model -> (qx, qy, qz, qw)
         self._quat_lock = threading.Lock()
 
-        # Per-drone bindings for both enemies and interceptors
-        self._wire_twist_ros_to_gz('enemy',       ENEMY_COUNT)
-        self._wire_twist_ros_to_gz('interceptor', INTERCEPTOR_COUNT)
-        self._wire_odom_gz_to_ros('enemy',        ENEMY_COUNT)
-        self._wire_odom_gz_to_ros('interceptor',  INTERCEPTOR_COUNT)
+        # Per-drone bindings driven by the _BRIDGED_MODELS table.
+        for kind, count in _BRIDGED_MODELS:
+            self._wire_twist_ros_to_gz(kind, count)
+            self._wire_odom_gz_to_ros(kind, count)
 
         self.get_logger().info(
-            f'BridgeShim ready — {ENEMY_COUNT} enemies + {INTERCEPTOR_COUNT} '
-            f'interceptors, both cmd_vel and odometry bridged.')
+            'BridgeShim ready — bridged: '
+            + ', '.join(f'{count} × {kind}'
+                        for kind, count in _BRIDGED_MODELS))
 
     # ── Twist: ROS → Gazebo ─────────────────────────────────────────────
 
