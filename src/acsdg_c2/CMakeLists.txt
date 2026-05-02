@@ -44,6 +44,20 @@ ament_target_dependencies(interceptor_controller_node
 install(TARGETS interceptor_controller_node
   DESTINATION lib/${PROJECT_NAME})
 
+# ── C++ node: coyote_controller_node ─────────────────────────────────────
+add_executable(coyote_controller_node src/coyote_controller_node.cpp)
+ament_target_dependencies(coyote_controller_node
+  rclcpp
+  acsdg_msgs
+  geometry_msgs
+  nav_msgs
+  std_msgs
+  builtin_interfaces
+)
+
+install(TARGETS coyote_controller_node
+  DESTINATION lib/${PROJECT_NAME})
+
 # ── Launch files ──────────────────────────────────────────────────────────
 install(DIRECTORY launch/
   DESTINATION share/${PROJECT_NAME}/launch)
