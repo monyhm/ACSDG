@@ -116,14 +116,12 @@ class C2EngineNode(Node):
             tid = int(data.get("target_id", -1))
         except Exception:
             return
-        # Free any weapon that was engaging this target.
-        for w in self._weapons:
-            if w.is_available():
-                continue
-            # Anvil tracks engaged target via mark_engaged; the InterceptorState
-            # callback will mark it idle once status flips to IDLE upstream.
-            # We just consume the ack here; no extra state needed in Phase 1.
-            pass
+        # Phase 1: ack is informational. Weapon slot frees when InterceptorState
+        # arrives with status=IDLE on the next 10 Hz tick. Phase 4's adaptive
+        # supervisor will use this hook for re-tasking on miss/abort.
+        # TODO(phase4): if outcome == MISS, mark (weapon_id, tid) failed and
+        # trigger cost-matrix rebuild excluding the failed pair.
+        del tid  # silence unused-variable warning
 
     def _on_timer(self) -> None:
         if not self._mission_active:
@@ -148,15 +146,7 @@ class C2EngineNode(Node):
                 threat_score=0.0,
                 state=t.get("state", "UNKNOWN"),
             )
-            score = score_threat(track)
-            track = Track(
-                track_id=track.track_id,
-                position=track.position,
-                velocity=track.velocity,
-                threat_score=score,
-                state=track.state,
-            )
-            tracks.append(track)
+            tracks.append(track.with_score(score_threat(track)))
 
         # Publish scores for the dashboard (matches legacy schema)
         score_list = [

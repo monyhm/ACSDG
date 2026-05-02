@@ -51,6 +51,15 @@ class Track:
         dz = self.position[2] - z
         return math.sqrt(dx * dx + dy * dy + dz * dz)
 
+    def with_score(self, score: float) -> "Track":
+        """Return a copy of this Track with `threat_score` replaced.
+
+        Frozen dataclass forces a copy; this is the canonical way to
+        rebuild a Track when downstream computation produces a new score.
+        """
+        from dataclasses import replace
+        return replace(self, threat_score=score)
+
 
 @dataclass
 class WeaponState:

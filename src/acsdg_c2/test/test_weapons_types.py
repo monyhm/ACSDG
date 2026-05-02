@@ -60,3 +60,15 @@ def test_weapon_state_marks_unavailable_when_not_idle():
     )
     assert s.available is False
     assert s.ammo_remaining is None
+
+
+def test_track_with_score_returns_copy_with_new_score():
+    t = Track(track_id=5, position=(1.0, 2.0, 3.0), velocity=(4.0, 5.0, 6.0),
+              threat_score=0.0, state="DETECTED")
+    t2 = t.with_score(0.7)
+    assert t2.threat_score == 0.7
+    assert t2.track_id == t.track_id
+    assert t2.position == t.position
+    assert t2.velocity == t.velocity
+    assert t2.state == t.state
+    assert t.threat_score == 0.0   # original unchanged (frozen)
