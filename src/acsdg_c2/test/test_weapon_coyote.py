@@ -34,8 +34,20 @@ def test_coyote_pkill_table_matches_spec():
 def test_coyote_engagement_envelope_matches_spec():
     c = make_coyote()
     env = c.engagement_envelope()
+    assert env.min_range == pytest.approx(100.0)    # booster-clear from launcher
     assert env.max_range == pytest.approx(5000.0)   # 5 km in sim, spec §6.2
+    assert env.min_alt == pytest.approx(0.0)
+    assert env.max_alt == pytest.approx(4500.0)     # Group-3 loitering ceiling, §7
     assert env.max_closing_speed == pytest.approx(160.0)
+
+
+def test_coyote_time_to_intercept_credits_inbound_closing_rate():
+    """Closing-rate code path: target inbound velocity should add to eff_speed."""
+    c = make_coyote(home=(0.0, 0.0, 0.0))
+    # Target 1500 m away in +x, moving at -10 m/s (inbound along LOS).
+    # eff_speed = max_speed (160) + closing (10) = 170; ToI = 1500 / 170 s.
+    track = make_track(pos=(1500.0, 0.0, 0.0), vel=(-10.0, 0.0, 0.0))
+    assert c.time_to_intercept(track) == pytest.approx(1500.0 / 170.0, rel=0.01)
 
 
 def test_coyote_can_engage_far_target_within_envelope():

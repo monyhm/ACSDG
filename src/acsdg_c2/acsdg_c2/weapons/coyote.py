@@ -36,7 +36,14 @@ _COYOTE_PKILL = {
 
 _COYOTE_MAX_SPEED = 160.0      # m/s — spec §6.2 (Mach 0.45)
 _COYOTE_MAX_RANGE = 5000.0     # m — Phase-2 sim value (real 10–15 km), spec §6.2
-_COYOTE_MIN_RANGE = 100.0      # m — proximity fuze arming distance, spec §6.2
+# Booster-clear minimum slant range. The Coyote is rocket-boosted before the
+# turbojet sustainer takes over; below ~100 m from the launcher there isn't
+# enough flight time for guidance to acquire and steer. NB: the spec §6.2
+# `proximity_fuze_arm_distance` (100 m FROM TARGET) is a different quantity —
+# that lives on the C++ controller's frag-fuze threshold, not on the
+# launch-side engagement envelope.
+_COYOTE_MIN_RANGE = 100.0      # m — booster-clear distance from launcher
+_COYOTE_MAX_ALT = 4500.0       # m — Group-3 loitering operational ceiling (§7)
 _COYOTE_RESOURCE_COST = 0.10   # $100k normalized — spec §6.2
 
 
@@ -78,7 +85,7 @@ class Coyote(WeaponSystem):
             min_range=_COYOTE_MIN_RANGE,
             max_range=_COYOTE_MAX_RANGE,
             min_alt=0.0,
-            max_alt=4500.0,        # spec §6.2 sim altitude ceiling
+            max_alt=_COYOTE_MAX_ALT,
             max_closing_speed=_COYOTE_MAX_SPEED,
         )
 

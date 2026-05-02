@@ -257,6 +257,7 @@ All values traceable to public sources. Estimated values are flagged.
 | `one_shot` | true | Manufacturer-published |
 | `resource_cost` | 0.10 (~$100k FY24 unit) | Defense-press-published |
 | `dimensions` | 1.0 × 0.5 × 0.15 m | **Estimated** (canister-launched form factor) |
+| `altitude_ceiling` | 4500 m (sim) | **Estimated** — matches §7 Group-3 loitering operational ceiling, the dominant target class for Coyote |
 
 **Pkill table per target class:**
 
