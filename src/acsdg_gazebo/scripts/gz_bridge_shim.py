@@ -11,12 +11,12 @@ odometry never reaches ROS.
 
 This shim re-bridges the data plane using the gz.transport13 / gz.msgs10
 Python bindings directly, which ARE installed on the system (alongside
-Gazebo Harmonic). It handles:
+Gazebo Harmonic). It handles cmd_vel and odometry for every model kind in
+the `_BRIDGED_MODELS` table below — currently enemy + interceptor + coyote.
 
-  ROS  Twist     /enemy_{N}/cmd_vel        → gz.msgs.Twist     /model/enemy_{N}/cmd_vel
-  ROS  Twist     /interceptor_{N}/cmd_vel  → gz.msgs.Twist     /model/interceptor_{N}/cmd_vel
-  gz.msgs.Odom   /model/enemy_{N}/odometry → ROS Odometry      /model/enemy_{N}/odometry
-  gz.msgs.Odom   /model/interceptor_{N}/odometry → ROS Odometry /model/interceptor_{N}/odometry
+Per-kind, per-instance topic shape:
+  ROS  Twist     /{kind}_{N}/cmd_vel        → gz.msgs.Twist     /model/{kind}_{N}/cmd_vel
+  gz.msgs.Odom   /model/{kind}_{N}/odometry → ROS Odometry      /model/{kind}_{N}/odometry
 """
 
 import math
@@ -45,17 +45,21 @@ from bridge_math import world_to_body_velocity
 
 # Models bridged on cmd_vel + odometry, as (kind, count) tuples. The bridge
 # wires `/{kind}_{1..count}/cmd_vel` (ROS) ↔ `/model/{kind}_{i}/cmd_vel` (gz)
-# for every kind. Phase 1 had only enemy + interceptor; Phase 2 adds the
-# Coyote at slot 1 alongside the remaining 3 Anvils (so interceptor_count
-# is now 3, not 4 — interceptor_1 is gone, replaced by coyote_1).
+# for every kind. Phase 1 had only enemy + interceptor; Phase 2 replaces
+# interceptor_1 with coyote_1 at the NE post.
+#
+# interceptor stays at count=4 (not 3) because the table is `count`-based,
+# not instance-list-based. Dropping to 3 would mis-wire the SURVIVING
+# interceptors at slots 2..4 (the loop walks range(1, count+1), so count=3
+# would wire instances 1,2,3 instead of 2,3,4). Keeping count=4 wires a
+# stale slot for instance 1, which is harmless: gz transport advertise/
+# subscribe on a topic with no peers just keeps an unused slot — no error,
+# no warning, no resource leak. If a future call site moves to explicit
+# instance lists `('interceptor', (2, 3, 4))` we can drop it then.
 _BRIDGED_MODELS = (
-    ('enemy',       4),    # enemy_1..4 still all 4 Anvils' targets
-    ('interceptor', 4),    # interceptor_1..4 — interceptor_1 is no longer
-                           # spawned by the world (replaced by coyote_1),
-                           # but we keep the topic wiring in case a stray
-                           # cmd_vel publisher targets unit 1; bridge to
-                           # a non-existent gz model is harmless (no-op).
-    ('coyote',      1),    # coyote_1 — new in Phase 2
+    ('enemy',       4),    # enemy_1..4 — Anvils' targets
+    ('interceptor', 4),    # interceptor_1..4 — slot 1 unused after Phase 2 (see note above)
+    ('coyote',      1),    # coyote_1 — new in Phase 2 at slot 1 (NE post)
 )
 
 
