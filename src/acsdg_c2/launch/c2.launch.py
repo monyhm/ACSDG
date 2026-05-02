@@ -1,13 +1,18 @@
 from launch import LaunchDescription
 from launch_ros.actions import Node
 
-# Fleet home positions: four corners of a 400 m × 400 m square, 20 m AGL
+# Fleet home positions: four corners of a 400 m × 400 m square, 20 m AGL.
+# Phase 2: slot 1 (NE) is a Coyote Block 2; slots 2/3/4 remain Anvil drones.
 FLEET: dict = {
-    1: ( 200.0,  200.0, 20.0),
-    2: (-200.0,  200.0, 20.0),
-    3: ( 200.0, -200.0, 20.0),
-    4: (-200.0, -200.0, 20.0),
+    1: ( 200.0,  200.0, 20.0),    # NE — Coyote Block 2 (Phase 2)
+    2: (-200.0,  200.0, 20.0),    # NW — Anvil
+    3: ( 200.0, -200.0, 20.0),    # SE — Anvil
+    4: (-200.0, -200.0, 20.0),    # SW — Anvil
 }
+
+# Slot id whose controller is the Coyote (jet, no rotors). All other slots
+# spawn the legacy Anvil interceptor_controller_node.
+COYOTE_SLOT = 1
 
 
 def generate_launch_description() -> LaunchDescription:
@@ -37,13 +42,17 @@ def generate_launch_description() -> LaunchDescription:
         ),
     ]
 
-    # ── One C++ controller per interceptor ────────────────────────────────
+    # ── One C++ controller per slot (Coyote at COYOTE_SLOT, Anvil elsewhere) ─
     for iid, (hx, hy, hz) in FLEET.items():
+        executable = ('coyote_controller_node' if iid == COYOTE_SLOT
+                      else 'interceptor_controller_node')
+        node_name = (f'coyote_controller_{iid}' if iid == COYOTE_SLOT
+                     else f'interceptor_controller_{iid}')
         nodes.append(
             Node(
                 package='acsdg_c2',
-                executable='interceptor_controller_node',
-                name=f'interceptor_controller_{iid}',
+                executable=executable,
+                name=node_name,
                 output='screen',
                 emulate_tty=True,
                 parameters=[{
