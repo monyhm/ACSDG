@@ -5,7 +5,7 @@ You are picking up an in-progress simulation project. **Read the cited files** r
 ## Project at a glance
 
 - **What**: Anti-Counter-Swarm Drone Defense Gazebo sim. 4 enemy drones spawn at the perimeter and fly toward the origin; 4 interceptor drones at corner posts pursue, physically intercept (real <8 m proximity), and despawn the enemy bodies.
-- **Where**: `~/acsdg_ws` (ROS 2 Humble + Gazebo Harmonic). Workspace not under git.
+- **Where**: `~/acsdg_ws` (ROS 2 Humble + Gazebo Harmonic). Git-tracked on `main`, remote `github.com/monyhm/ACSDG`.
 - **Build**: `cd ~/acsdg_ws && colcon build --symlink-install --allow-overriding <pkg>` (most edits land live via symlinks; `acsdg_c2` is C++ and needs a real rebuild on each change).
 - **Run**: `LIBGL_ALWAYS_SOFTWARE=1 ros2 launch acsdg_bringup acsdg_full.launch.py headless:=false`
 - **Trigger a wave**: `ros2 topic pub --times 5 -r 0.5 /mission/wave_trigger std_msgs/Bool '{data: true}'`. **Do not use `-1`** — DDS discovery sometimes drops the first publish before c2_engine's subscription is matched. Five publishes over 8 s reliably hits everyone. Each publish increments the wave counter; speeds default to 5 m/s for waves > 3, so it's safe.
@@ -28,7 +28,7 @@ src/
   acsdg_gazebo/
     worlds/military_base.sdf                    # world; <gravity>0 0 0</gravity> at line 15
     models/{enemy,interceptor}_drone/model.sdf  # kinematic, gz-sim-velocity-control-system, OdometryPublisher with <dimensions>3</dimensions>
-    scripts/gz_bridge_shim.py                   # ROS↔GZ data-plane bridge (NO yaw rotation — see below)
+    scripts/gz_bridge_shim.py                   # ROS↔GZ data-plane bridge; full inverse-quaternion rotation on cmd_vel — see below
     scripts/enemy_driver_node.py                # drives enemies on /mission/wave_trigger; despawns on NEUTRALIZED ack
     launch/sensors.launch.py                    # rf_node skipped in gazebo-truth mode
   acsdg_sensors/src/
@@ -44,7 +44,7 @@ src/
 
 ## Critical architecture details (don't relitigate these)
 
-**Bridge** (`gz_bridge_shim.py`). ROS 2 Humble's stock `ros_gz_bridge` targets Ignition Fortress (`ign.msgs.*`); Gazebo Harmonic uses `gz.msgs.*` — same wire format, different type strings, stock bridge silently drops everything. The shim uses `gz.transport13` + `gz.msgs10` Python bindings directly. **It does NOT rotate cmd_vel.** `gz-sim-velocity-control-system` in Harmonic applies `cmd_vel` in WORLD frame. An earlier version of the shim rotated by cached yaw assuming body-frame; once bodies started tumbling (no rotational damping with gravity off) that rotation became actively wrong and interceptors drifted to z=2 km. Don't reintroduce the rotation.
+**Bridge** (`gz_bridge_shim.py`). ROS 2 Humble's stock `ros_gz_bridge` targets Ignition Fortress (`ign.msgs.*`); Gazebo Harmonic uses `gz.msgs.*` — same wire format, different type strings, stock bridge silently drops everything. The shim uses `gz.transport13` + `gz.msgs10` Python bindings directly. **`gz-sim-velocity-control-system` in Harmonic applies `cmd_vel` in BODY frame** (verified against gz-sim8 source — no world-frame SDF option, plugin writes `LinearVelocityCmd` unrotated). Controllers and `enemy_driver` publish in WORLD frame, so `_forward_twist` applies the **full inverse-quaternion rotation** R(q)^T·v_world using the body's orientation cached from `/model/<name>/odometry`. Yaw-only rotation was tried and rejected: simple `2*atan2(qz, qw)` extraction breaks when bodies pick up roll/pitch from numerical noise. The full quaternion form is robust to any orientation. Forwarded angular is also forced to (0,0,0) as defense-in-depth — drones never need angular cmd in this project. The earliest commit (51897bb3) had cmd_vel passthrough, which silently broke for enemies (yaw=π) — they flew opposite of commanded direction. The 2026-04-27 session removed yaw rotation under the false belief that the plugin used world frame, masking the bug as "interceptors mostly work, enemies broken." The 2026-05-02 fix (commit 5fa0955c) is the correct treatment.
 
 **Gravity** (`worlds/military_base.sdf` line 15). `<gravity>0 0 0</gravity>` at world level. Drones are kinematic velocity-controlled bodies; without gravity off, the velocity-control plugin can't hold altitude between command ticks. Link-level `<gravity>false</gravity>` is silently ignored by Harmonic — don't trust it. World-level zero is the real fix; safe because every other include in the world is `<static>true</static>`.
 
@@ -89,6 +89,24 @@ Kill-time geometry from controller:
 Interceptor #N: NEUTRALISED target #M at range=R.RRm int(...) tgt(...)
 ```
 If `range > 8m` you're back to phantom tracks — check that `rf_node` is off (`pgrep rf_node` should be empty) and that fusion's seeing radar from Gazebo truth (`/tmp/acsdg_sim.log` should show "RadarNode [GAZEBO-TRUTH]").
+
+## What changed in session 2026-05-02
+
+**Phase 1 of the AI-orchestrated heterogeneous-defense upgrade** + a load-bearing physics fix. Spec at `docs/superpowers/specs/2026-05-02-ai-orchestrated-heterogeneous-defense-design.md`, plan at `docs/superpowers/plans/2026-05-02-phase1-c2-refactor-anvil-port.md`.
+
+1. **C2 modular refactor.** `c2_engine_node.py` is no longer monolithic. The threat-scoring + cost-matrix + Hungarian + EngagementOrder construction has been decomposed into composable modules under `acsdg_c2/`:
+   - `weapons/` — `WeaponSystem` ABC + `Anvil` concrete class (Phase 1 has 4 Anvils; Phases 2–4 will add Coyote Block 2, DroneHunter F700, Skyranger 30).
+   - `classifier/bayesian.py` — Phase-1 stub; full Bayesian classifier wired up in Phase 4.
+   - `cost_function/threat_priority.py` — `score_threat(track)` extracted verbatim from legacy `_score`.
+   - `cost_function/expected_utility.py` — `build_cost_matrix(weapons, tracks)` returns time-to-intercept geometry; Phase 5 swaps in the full expected-utility math.
+   - `assignment/solver.py` — `assign(cost_matrix)` thin wrapper over the existing pure-Python Hungarian.
+   - `dispatcher/dispatcher.py` — translates `(weapon, track)` decisions into `EngagementOrder` payloads. Phase 1 maps `weapon_id "anvil_<N>"` → `interceptor_id (N+1)` so the legacy C++ controller subscribing to `/interceptors/unit_{1..4}/state` keeps working unchanged.
+   - 40 unit tests + 2 integration tests cover the refactor. ROS topic shapes preserved.
+2. **Bridge shim full-quaternion rotation** (commit `5fa0955c`). `_forward_twist` now applies `R(q)^T · v_world` to convert world-frame ROS Twist into body-frame for Gazebo's `gz-sim-velocity-control-system`. The plugin applies cmd_vel in BODY frame (verified against gz-sim8 source), not WORLD as the prior session believed. See the "Bridge" architecture detail above.
+3. **Interceptor spawn z bumped from 5 to 20** in `military_base.sdf` to clear ground-collision impulses that were tipping bodies on startup. With z=20 (matching `interceptor_controller_node` `home_z`), bodies stay at identity orientation `(0,0,0,1)`.
+4. **Wave-trigger DDS race**: `--once` publishes can still miss `enemy_driver` due to discovery race. `--times 5 -r 0.5` remains the reliable pattern (per HANDOFF). Each publish increments wave count; speeds 5/8/12/5/5 m/s for waves 1–5.
+
+End-of-session live verification: 4 interceptors NEUTRALISED 4 enemies at ranges 7.82–7.95 m (within HANDOFF baseline 6.81–8.0 m), zero breaches.
 
 ## Auto-memory checkpoint
 
