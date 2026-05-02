@@ -260,8 +260,19 @@ private:
     if (best_dist <= kAssocGate && best_id != 0) {
       fused_targets_.at(best_id).ingest(msg, type, now);
     } else if (type == SensorType::RADAR) {
-      // Only radar creates new tracks (it provides Cartesian position)
-      uint32_t nid = next_id_++;
+      // Only radar creates new tracks (it provides Cartesian position).
+      // Prefer the upstream track id so fused_target_N corresponds to
+      // enemy_N in the sim — this lets BREACHED acks (published by
+      // enemy_driver with the enemy model index) correlate back to a
+      // fused track. Fall back to auto-increment on conflict.
+      uint32_t nid = msg.id;
+      if (nid == 0 || fused_targets_.count(nid)) {
+        nid = next_id_++;
+      }
+      // Keep next_id_ ahead of any upstream id we just consumed so a
+      // later conflicting track still gets a fresh slot.
+      if (nid >= next_id_) { next_id_ = nid + 1; }
+
       FusedState fs;
       fs.id        = nid;
       fs.state     = "DETECTED";

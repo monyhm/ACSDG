@@ -25,7 +25,7 @@ import math
 
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import String
+from std_msgs.msg import Bool, String
 from acsdg_msgs.msg import InterceptorState, EngagementOrder
 
 from acsdg_c2.hungarian import hungarian
@@ -33,6 +33,10 @@ from acsdg_c2.hungarian import hungarian
 # ── Scoring constants ─────────────────────────────────────────────────────
 MAX_RANGE = 400.0   # m — normalisation range for proximity score
 MAX_SPEED = 20.0    # m/s — normalisation speed
+
+# Interceptor top speed — must match kMaxSpeed in interceptor_controller_node.cpp.
+# Used in the assignment-cost denominator so closing geometry affects pairing.
+INTERCEPTOR_MAX_SPEED = 15.0
 
 # Number of interceptors managed by the fleet
 NUM_INTERCEPTORS = 4
@@ -48,11 +52,27 @@ class C2EngineNode(Node):
         self._interceptors: dict  = {}   # id → InterceptorState msg
         # Track which threats already have an engagement order issued this cycle
         self._assigned_threats: set = set()
+        # Engagement is gated on the mission being active. Without this gate,
+        # radar sees the stationary enemies at spawn before any wave is
+        # triggered, fusion mints tracks, and interceptors fly out and kill
+        # them before the operator has a chance to start the demo.
+        self._mission_active: bool = False
 
         # ── Subscriptions ─────────────────────────────────────────────────
         self.create_subscription(
             String, '/sensors/fusion/targets',
             self._on_targets, 10)
+
+        self.create_subscription(
+            Bool, '/mission/wave_trigger',
+            self._on_wave, 10)
+
+        # Engagement outcomes from interceptor controllers — clears the
+        # assignment so C2 can retask if the target survives (LOST) or
+        # is gone (NEUTRALIZED).
+        self.create_subscription(
+            String, '/mission/engagement_ack',
+            self._on_engagement_ack, 10)
 
         for iid in range(1, NUM_INTERCEPTORS + 1):
             self.create_subscription(
@@ -81,9 +101,25 @@ class C2EngineNode(Node):
     def _on_interceptor_state(self, msg: InterceptorState) -> None:
         self._interceptors[int(msg.id)] = msg
 
+    def _on_wave(self, msg: Bool) -> None:
+        if msg.data and not self._mission_active:
+            self._mission_active = True
+            self.get_logger().info('Mission active — engagement enabled')
+
+    def _on_engagement_ack(self, msg: String) -> None:
+        try:
+            data = json.loads(msg.data)
+            tid  = int(data.get('target_id', -1))
+        except Exception:
+            return
+        # Any outcome releases the assignment slot.
+        self._assigned_threats.discard(tid)
+
     # ── 10 Hz control loop ────────────────────────────────────────────────
 
     def _on_timer(self) -> None:
+        if not self._mission_active:
+            return
         if not self._targets:
             return
 
@@ -118,17 +154,32 @@ class C2EngineNode(Node):
         if not idle_ids or not unassigned_ids:
             return
 
-        # Cost matrix: rows = idle interceptors, cols = unassigned threats
+        # Cost matrix: rows = idle interceptors, cols = unassigned threats.
+        # Cost is an approximate time-to-intercept rather than raw distance —
+        # so a far-but-inbound threat is preferred over a close-but-crossing
+        # one (its closing rate credits the denominator).
         cost: list = []
         for iid in idle_ids:
             ist = self._interceptors[iid]
             row = []
             for tid in unassigned_ids:
                 tgt = self._targets[tid]
-                dx = ist.position.x - tgt['position']['x']
-                dy = ist.position.y - tgt['position']['y']
-                dz = ist.position.z - tgt['position']['z']
-                row.append(math.sqrt(dx*dx + dy*dy + dz*dz))
+                dx = tgt['position']['x'] - ist.position.x
+                dy = tgt['position']['y'] - ist.position.y
+                dz = tgt['position']['z'] - ist.position.z
+                d  = math.sqrt(dx*dx + dy*dy + dz*dz)
+                if d < 1e-6:
+                    row.append(0.0)
+                    continue
+                # Target velocity component pointing AT the interceptor
+                # (positive means target is closing in on it).
+                urx, ury, urz = -dx / d, -dy / d, -dz / d
+                vx = tgt['velocity']['x']
+                vy = tgt['velocity']['y']
+                vz = tgt['velocity']['z']
+                closing = vx * urx + vy * ury + vz * urz
+                eff = max(1.0, INTERCEPTOR_MAX_SPEED + closing)
+                row.append(d / eff)
             cost.append(row)
 
         assignments = hungarian(cost)

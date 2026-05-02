@@ -63,6 +63,13 @@ class InterceptorManagerNode(Node):
             EngagementOrder, '/c2/engagement_orders',
             self._on_order, 10)
 
+        # Engagement outcomes: flip PURSUING → RETURNING so the position
+        # check below can eventually flip back to IDLE. Without this the
+        # fleet gets stuck PURSUING forever after its first assignment.
+        self.create_subscription(
+            String, '/mission/engagement_ack',
+            self._on_engagement_ack, 10)
+
         for iid in HOME:
             self.create_subscription(
                 Point, f'/interceptors/unit_{iid}/position',
@@ -87,6 +94,17 @@ class InterceptorManagerNode(Node):
         self._state[iid]['target_id'] = int(msg.target_id)
         self.get_logger().info(
             f'Interceptor #{iid}: {prev} → PURSUING target #{msg.target_id}')
+
+    def _on_engagement_ack(self, msg: String) -> None:
+        try:
+            data = json.loads(msg.data)
+            iid  = int(data.get('interceptor_id', 0))
+        except Exception:
+            return
+        if iid in self._state and self._state[iid]['status'] == 'PURSUING':
+            self._state[iid]['status']    = 'RETURNING'
+            self._state[iid]['target_id'] = 0
+            self.get_logger().info(f'Interceptor #{iid}: PURSUING → RETURNING')
 
     def _on_position(self, msg: Point, iid: int) -> None:
         """Update interceptor position from the flight controller."""

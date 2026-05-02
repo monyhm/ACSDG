@@ -31,11 +31,14 @@ def generate_launch_description():
     model_path  = os.path.join(pkg_share, 'models')
     bridge_cfg  = os.path.join(pkg_share, 'config', 'bridge_config.yaml')
 
-    # Also include PX4 models if available
+    # Also include PX4 models and acsdg_sensors_hw models
     px4_model_path = os.path.expanduser('~/PX4-Autopilot/Tools/simulation/gz/models')
-    gz_model_path = model_path
+    sensors_hw_share = get_package_share_directory('acsdg_sensors_hw')
+    sensors_model_path = os.path.join(sensors_hw_share, 'models')
+
+    gz_model_path = f"{model_path}:{sensors_model_path}"
     if os.path.isdir(px4_model_path):
-        gz_model_path = f"{model_path}:{px4_model_path}"
+        gz_model_path = f"{gz_model_path}:{px4_model_path}"
 
     return LaunchDescription([
         # ── Arguments ─────────────────────────────────────────────────────
@@ -80,6 +83,18 @@ def generate_launch_description():
             name='ros_gz_bridge',
             output='screen',
             parameters=[{'config_file': bridge_cfg}],
+            condition=IfCondition(LaunchConfiguration('bridge')),
+        ),
+
+        # ── Data-plane shim for cmd_vel + odometry ────────────────────────
+        # The stock ros_gz_bridge in Humble ships as ign.msgs.*; Gazebo
+        # Harmonic wants gz.msgs.*. This shim uses gz.transport13 directly.
+        Node(
+            package='acsdg_gazebo',
+            executable='gz_bridge_shim',
+            name='gz_bridge_shim',
+            output='screen',
+            emulate_tty=True,
             condition=IfCondition(LaunchConfiguration('bridge')),
         ),
 

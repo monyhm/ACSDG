@@ -14,6 +14,7 @@ find_package(ament_cmake_python REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(acsdg_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(builtin_interfaces REQUIRED)
 find_package(mavros_msgs REQUIRED)
@@ -34,6 +35,7 @@ ament_target_dependencies(interceptor_controller_node
   rclcpp
   acsdg_msgs
   geometry_msgs
+  nav_msgs
   std_msgs
   builtin_interfaces
   mavros_msgs

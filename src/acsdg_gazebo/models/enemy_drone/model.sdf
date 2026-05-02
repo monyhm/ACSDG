@@ -5,6 +5,17 @@
 
     <!-- ── Main body ─────────────────────────────────────────────────── -->
     <link name="base_link">
+      <!-- Kinematic velocity-controlled body (see plugin below); gravity
+           would fight the velocity plugin between command ticks and drag
+           the drone to z=0 whenever cmd_vel stops arriving. -->
+      <gravity>false</gravity>
+      <!-- See interceptor_drone/model.sdf for the rationale behind the
+           angular damping. Enemies are slower so they tumbled less, but
+           same plugin behaviour, same fix. -->
+      <velocity_decay>
+        <linear>0</linear>
+        <angular>10</angular>
+      </velocity_decay>
       <inertial>
         <mass>1.5</mass>
         <inertia>
@@ -92,12 +103,13 @@
       name="gz::sim::systems::VelocityControl">
     </plugin>
 
-    <!-- ── Odometry publisher ────────────────────────────────────────── -->
+    <!-- ── Odometry publisher (3D — default is 2D, which zeroes pose.z) ── -->
     <plugin filename="gz-sim-odometry-publisher-system"
       name="gz::sim::systems::OdometryPublisher">
       <odom_frame>world</odom_frame>
       <robot_base_frame>enemy_drone</robot_base_frame>
       <odom_publish_frequency>20</odom_publish_frequency>
+      <dimensions>3</dimensions>
     </plugin>
 
   </model>

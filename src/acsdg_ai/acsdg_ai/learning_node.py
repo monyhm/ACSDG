@@ -48,7 +48,9 @@ import torch.optim as optim
 # ── Shared model paths ────────────────────────────────────────────────────────
 
 MODEL_DIR       = pathlib.Path.home() / '.ros' / 'acsdg_ai' / 'models'
-LSTM_MODEL_PATH = MODEL_DIR / 'lstm_intent.pt'
+# Must match threat_predictor_node.MODEL_PATH — otherwise fine-tuning
+# silently updates a file nobody reads.
+LSTM_MODEL_PATH = MODEL_DIR / 'lstm_intent_v2.pt'
 GNN_MODEL_PATH  = MODEL_DIR / 'gnn_swarm.pt'
 
 INTENT_LABELS = ['KAMIKAZE', 'RECON', 'DECOY']
@@ -62,17 +64,21 @@ SEQ_LEN        = 20   # must match threat_predictor_node
 # ── Inline lightweight model definitions (mirrors the other nodes) ─────────────
 
 class _LSTMIntent(nn.Module):
+    """Mirror of threat_predictor_node.LSTMIntentModel so load_state_dict
+    round-trips the full file (including path_head). Fine-tune only touches
+    the intent head; the path head is frozen and saved back unchanged."""
     def __init__(self) -> None:
         super().__init__()
         self.lstm        = nn.LSTM(6, 64, 2, batch_first=True, dropout=0.2)
         self.fc          = nn.Linear(64, 32)
+        self.path_head   = nn.Linear(32, 5 * 3)
         self.intent_head = nn.Linear(32, 3)
         self.relu        = nn.ReLU()
 
     def forward(self, x):
         out, _ = self.lstm(x)
         h = self.relu(self.fc(out[:, -1, :]))
-        return self.intent_head(h)   # logits
+        return self.intent_head(h)   # logits (intent only)
 
 
 # ── Node ──────────────────────────────────────────────────────────────────────
@@ -93,6 +99,12 @@ class LearningNode(Node):
         self._last_tactic: str  = 'UNKNOWN'
         self._last_tactic_conf: float = 0.0
 
+        # Rolling per-target frame buffers — one deque of SEQ_LEN (x,y,z,vx,vy,vz)
+        # samples per active target id. Without this the LSTM fine-tuner saw a
+        # single stationary frame repeated 20 times and could not learn any
+        # temporal pattern. Captured into the replay entry at outcome time.
+        self._frame_buffers: dict = {}   # id → deque(maxlen=SEQ_LEN)
+
         # Stats
         self._total_finetune_runs = 0
         self._total_lstm_samples  = 0
@@ -109,13 +121,20 @@ class LearningNode(Node):
             ThreatPrediction, '/ai/threat_predictions', self._on_prediction, 10)
         self.create_subscription(
             SwarmClassification, '/ai/swarm_classification', self._on_swarm, 10)
+        # Ground-truth outcomes from interceptor controllers. Before this
+        # existed we guessed from interceptor-to-target proximity — which
+        # fed the fine-tuner noisy labels. Now it's event-driven.
+        self.create_subscription(
+            String, '/mission/engagement_ack', self._on_engagement_ack, 10)
 
         # ── Publisher ─────────────────────────────────────────────────────
         self._status_pub = self.create_publisher(String, '/learning/status', 10)
 
         # ── Timers ────────────────────────────────────────────────────────
         self.create_timer(1.0, self._on_status_timer)    # 1 Hz status
-        self.create_timer(2.0, self._infer_outcomes)     # 2 Hz outcome inference
+        # BREACHED detection stays heuristic (no signal from enemy_driver yet);
+        # NEUTRALIZED/LOST now come via engagement_ack.
+        self.create_timer(2.0, self._scan_for_breaches)
 
         self.get_logger().info('LearningNode started')
 
@@ -126,7 +145,26 @@ class LearningNode(Node):
             targets = json.loads(msg.data)
             self._targets = {int(t['id']): t for t in targets}
         except Exception:
-            pass
+            return
+        # Update per-target rolling frame buffers.
+        live_ids = set()
+        for t in targets:
+            try:
+                tid = int(t['id'])
+            except Exception:
+                continue
+            live_ids.add(tid)
+            p = t.get('position', {}); v = t.get('velocity', {})
+            frame = [
+                p.get('x', 0.0), p.get('y', 0.0), p.get('z', 0.0),
+                v.get('x', 0.0), v.get('y', 0.0), v.get('z', 0.0),
+            ]
+            if tid not in self._frame_buffers:
+                self._frame_buffers[tid] = deque(maxlen=SEQ_LEN)
+            self._frame_buffers[tid].append(frame)
+        # Drop buffers for disappeared targets
+        for stale_id in [k for k in self._frame_buffers if k not in live_ids]:
+            self._frame_buffers.pop(stale_id, None)
 
     def _on_fleet(self, msg: String) -> None:
         try:
@@ -142,62 +180,72 @@ class LearningNode(Node):
         self._last_tactic      = msg.tactic
         self._last_tactic_conf = msg.confidence
 
-    # ── Outcome inference (2 Hz) ───────────────────────────────────────────
+    # ── Outcome capture ───────────────────────────────────────────────────
 
-    def _infer_outcomes(self) -> None:
-        """
-        Heuristic: for each PURSUING interceptor, check proximity to its target.
-        < 30 m → likely NEUTRALIZED.  Target vanished → NEUTRALIZED.
-        Target breached (dist to origin < 20 m, still moving) → BREACHED.
-        """
-        for iid, unit in self._fleet.items():
-            if unit.get('status') != 'PURSUING':
-                continue
-            tid = int(unit.get('target_id', 0))
-            if tid == 0:
-                continue
+    def _on_engagement_ack(self, msg: String) -> None:
+        """Ground-truth outcome from the interceptor flight controller."""
+        try:
+            data    = json.loads(msg.data)
+            tid     = int(data.get('target_id', 0))
+            outcome = str(data.get('outcome', ''))
+        except Exception:
+            return
+        # LOST is not a training signal (interceptor gave up — tells us
+        # nothing about the threat's intent or the swarm's tactic).
+        if outcome in ('NEUTRALIZED',) and tid != 0:
+            self._record_outcome(tid, outcome)
 
-            ipos = unit.get('position', {})
-            ix, iy, iz = ipos.get('x', 0.0), ipos.get('y', 0.0), ipos.get('z', 0.0)
-
-            tgt = self._targets.get(tid)
-            if tgt is None:
-                # Target dropped from fusion — assume neutralized
-                self._record_outcome(tid, 'NEUTRALIZED')
-                continue
-
-            tp = tgt.get('position', {})
-            tx, ty, tz = tp.get('x', 0.0), tp.get('y', 0.0), tp.get('z', 0.0)
-            dist_to_interceptor = math.sqrt(
-                (ix-tx)**2 + (iy-ty)**2 + (iz-tz)**2)
-
-            dist_to_origin = math.sqrt(tx*tx + ty*ty + tz*tz)
-
-            if dist_to_interceptor < 30.0:
-                self._record_outcome(tid, 'NEUTRALIZED')
-            elif dist_to_origin < 20.0:
-                self._record_outcome(tid, 'BREACHED')
+    def _scan_for_breaches(self) -> None:
+        """BREACHED heuristic: target got within 20 m of origin with non-zero
+        velocity. Would ideally be replaced by an explicit signal from
+        enemy_driver_node when a drone reaches the base perimeter."""
+        breached_ids = []
+        for tid, tgt in self._targets.items():
+            p = tgt.get('position', {})
+            tx, ty, tz = p.get('x', 0.0), p.get('y', 0.0), p.get('z', 0.0)
+            v = tgt.get('velocity', {})
+            vx, vy, vz = v.get('x', 0.0), v.get('y', 0.0), v.get('z', 0.0)
+            if math.sqrt(tx*tx + ty*ty + tz*tz) < 20.0 and \
+               math.sqrt(vx*vx + vy*vy + vz*vz) > 0.5:
+                breached_ids.append(tid)
+        for tid in breached_ids:
+            self._record_outcome(tid, 'BREACHED')
 
     def _record_outcome(self, tid: int, outcome: str) -> None:
         pred = self._predictions.get(tid)
         if pred is None:
             return
 
+        # INTENT_LABELS has 3 entries; fallback to KAMIKAZE (0) rather than
+        # the out-of-range 3 that crashed CrossEntropyLoss.
         intent_idx = (INTENT_LABELS.index(pred.intent)
-                      if pred.intent in INTENT_LABELS else 3)
+                      if pred.intent in INTENT_LABELS else 0)
         tactic_idx = (TACTIC_LABELS.index(self._last_tactic)
                       if self._last_tactic in TACTIC_LABELS else 3)
 
-        # Build a feature row from latest target state
-        tgt = self._targets.get(tid, {})
-        p = tgt.get('position', {}); v = tgt.get('velocity', {})
-        features = [
-            p.get('x', 0.0), p.get('y', 0.0), p.get('z', 0.0),
-            v.get('x', 0.0), v.get('y', 0.0), v.get('z', 0.0),
-        ]
+        # Snapshot the target's rolling frame buffer. If short, the fine-tune
+        # pads later. Empty → skip the entry (nothing to learn).
+        buf = self._frame_buffers.get(tid)
+        if not buf:
+            return
+        sequence = list(buf)
+
+        # Snapshot the swarm state at outcome time: all active drones with
+        # their 7-feature (x,y,z,vx,vy,vz,threat_score) rows. Used by the
+        # GNN fine-tuner to build a real multi-node graph instead of the
+        # isolated-node graphs the previous code was using.
+        swarm_nodes = []
+        for sid, stgt in self._targets.items():
+            sp = stgt.get('position', {}); sv = stgt.get('velocity', {})
+            swarm_nodes.append([
+                sp.get('x', 0.0), sp.get('y', 0.0), sp.get('z', 0.0),
+                sv.get('x', 0.0), sv.get('y', 0.0), sv.get('z', 0.0),
+                float(stgt.get('threat_score', 0.5)),
+            ])
 
         entry = {
-            'features':      features,
+            'sequence':      sequence,     # list of [x,y,z,vx,vy,vz] frames
+            'swarm_nodes':   swarm_nodes,  # list of 7-feature rows
             'intent_label':  intent_idx,
             'tactic_label':  tactic_idx,
             'outcome':       outcome,
@@ -240,12 +288,23 @@ class LearningNode(Node):
             self.get_logger().warn(f'LSTM fine-tune: could not load weights: {exc}')
             return
 
-        # Build (batch, SEQ_LEN, 6) tensors by repeating the single feature row
+        # Build (batch, SEQ_LEN, 6) tensors from the captured sequences.
+        # Left-pad shorter buffers by repeating the first frame so the LSTM
+        # still sees SEQ_LEN timesteps.
         X_list, Y_list = [], []
         for e in entries:
-            seq = [e['features']] * SEQ_LEN
+            seq = e.get('sequence') or []
+            if not seq:
+                continue
+            if len(seq) < SEQ_LEN:
+                seq = [seq[0]] * (SEQ_LEN - len(seq)) + list(seq)
+            else:
+                seq = list(seq[-SEQ_LEN:])
             X_list.append(seq)
             Y_list.append(e['intent_label'])
+
+        if not X_list:
+            return
 
         X = torch.tensor(X_list, dtype=torch.float32)
         Y = torch.tensor(Y_list, dtype=torch.long)
@@ -296,13 +355,37 @@ class LearningNode(Node):
             self.get_logger().warn(f'GNN fine-tune: could not load weights: {exc}')
             return
 
+        # Build one graph per outcome using the swarm snapshot captured at
+        # ACK time: nodes = all active drones (7 features each), edges =
+        # bidirectional if ≤80 m apart (matching the inference-time rule
+        # in swarm_classifier_node). Single-drone snapshots get an empty
+        # edge set; they contribute only a trivial node-level signal.
+        EDGE_THRESHOLD = 80.0
         data_list, labels = [], []
         for e in entries:
-            feat = e['features'] + [0.5]   # pad to 7 features (score unknown)
-            node_x     = torch.tensor([feat], dtype=torch.float32)
-            edge_index = torch.zeros((2, 0), dtype=torch.long)
+            nodes = e.get('swarm_nodes') or []
+            if not nodes:
+                continue
+            node_x = torch.tensor(nodes, dtype=torch.float32)
+            src, dst = [], []
+            for i in range(len(nodes)):
+                for j in range(len(nodes)):
+                    if i == j:
+                        continue
+                    dx = nodes[i][0] - nodes[j][0]
+                    dy = nodes[i][1] - nodes[j][1]
+                    dz = nodes[i][2] - nodes[j][2]
+                    if (dx*dx + dy*dy + dz*dz) ** 0.5 <= EDGE_THRESHOLD:
+                        src.append(i); dst.append(j)
+            if src:
+                edge_index = torch.tensor([src, dst], dtype=torch.long)
+            else:
+                edge_index = torch.zeros((2, 0), dtype=torch.long)
             data_list.append(Data(x=node_x, edge_index=edge_index))
             labels.append(e['tactic_label'])
+
+        if not data_list:
+            return
 
         Y = torch.tensor(labels, dtype=torch.long)
         optimizer = optim.Adam(model.parameters(), lr=5e-4)

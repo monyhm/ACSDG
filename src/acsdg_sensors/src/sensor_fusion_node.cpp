@@ -19,6 +19,7 @@
 #include "acsdg_sensors/sensor_interface.hpp"
 #include <acsdg_msgs/msg/radar_track.hpp>
 #include <acsdg_msgs/msg/fused_target.hpp>
+#include <std_msgs/msg/bool.hpp>
 #include <std_msgs/msg/string.hpp>
 
 #include <chrono>
@@ -26,6 +27,7 @@
 #include <iomanip>
 #include <limits>
 #include <map>
+#include <set>
 #include <sstream>
 #include <string>
 
@@ -153,6 +155,25 @@ public:
         handleTrack(*msg, /*is_radar=*/false);
       });
 
+    // Engagement outcomes. A target flagged NEUTRALIZED here is dropped
+    // from the fused output so C2 doesn't keep re-assigning interceptors
+    // to a ghost track the sim hasn't despawned yet.
+    ack_sub_ = create_subscription<std_msgs::msg::String>(
+      "/mission/engagement_ack", rclcpp::QoS(10),
+      [this](std_msgs::msg::String::SharedPtr msg) { onAck(*msg); });
+
+    // New wave → enemy drones are re-activated in-place. Clear the killed
+    // set so radar tracks for the re-flying drones are no longer ignored.
+    wave_sub_ = create_subscription<std_msgs::msg::Bool>(
+      "/mission/wave_trigger", rclcpp::QoS(10),
+      [this](std_msgs::msg::Bool::SharedPtr msg) {
+        if (msg->data) {
+          RCLCPP_INFO(get_logger(),
+            "Wave trigger — clearing %zu killed-target ids", killed_ids_.size());
+          killed_ids_.clear();
+        }
+      });
+
     timer_ = create_wall_timer(
       std::chrono::milliseconds(100),   // 10 Hz output
       [this]() { publishFused(); });
@@ -165,8 +186,44 @@ public:
 private:
   // ── Track ingestion (called on every radar or RF message) ──────────────
 
+  void onAck(const std_msgs::msg::String & msg)
+  {
+    // Lightweight JSON parse — we only need target_id + outcome.
+    const std::string & s = msg.data;
+    auto find_int = [&](const std::string & key) -> int {
+      auto k = s.find("\"" + key + "\":");
+      if (k == std::string::npos) return 0;
+      auto start = s.find_first_of("0123456789-", k);
+      if (start == std::string::npos) return 0;
+      auto end = s.find_first_not_of("0123456789-", start);
+      return std::stoi(s.substr(start, end - start));
+    };
+    auto find_str = [&](const std::string & key) -> std::string {
+      auto k = s.find("\"" + key + "\":\"");
+      if (k == std::string::npos) return "";
+      auto start = s.find("\"", k + key.size() + 3);
+      if (start == std::string::npos) return "";
+      auto end = s.find("\"", start + 1);
+      return s.substr(start + 1, end - start - 1);
+    };
+    int tid              = find_int("target_id");
+    std::string outcome  = find_str("outcome");
+    if (tid <= 0) return;
+    if (outcome == "NEUTRALIZED" || outcome == "BREACHED") {
+      killed_ids_.insert(static_cast<uint32_t>(tid));
+      fused_targets_.erase(static_cast<uint32_t>(tid));
+      target_pubs_.erase(static_cast<uint32_t>(tid));
+      RCLCPP_INFO(get_logger(),
+        "Dropped target #%d from fusion (outcome=%s)", tid, outcome.c_str());
+    }
+  }
+
   void handleTrack(const acsdg_msgs::msg::RadarTrack & msg, bool is_radar)
   {
+    // Ignore updates for targets we've already counted as killed — the
+    // Gazebo model may still be publishing odometry until we despawn it.
+    if (killed_ids_.count(msg.id)) return;
+
     const rclcpp::Time now = this->now();
 
     // Nearest-neighbour search over cached fused positions
@@ -184,8 +241,17 @@ private:
     if (best_dist <= kAssocGate && best_id != 0) {
       fused_targets_.at(best_id).ingest(msg, is_radar, now);
     } else {
-      // New target
-      uint32_t nid = next_id_++;
+      // New target. Prefer the upstream track id (e.g. radar_node sets
+      // msg.id = enemy model index) so fused_target_N maps back to
+      // enemy_N — lets BREACHED acks from enemy_driver correlate to a
+      // fused track. Fall back to auto-increment if the id is zero or
+      // already in use.
+      uint32_t nid = msg.id;
+      if (nid == 0 || fused_targets_.count(nid)) {
+        nid = next_id_++;
+      }
+      if (nid >= next_id_) { next_id_ = nid + 1; }
+
       FusedState fs;
       fs.id        = nid;
       fs.state     = "DETECTED";
@@ -268,6 +334,8 @@ private:
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr json_pub_;
   rclcpp::Subscription<acsdg_msgs::msg::RadarTrack>::SharedPtr radar_sub_;
   rclcpp::Subscription<acsdg_msgs::msg::RadarTrack>::SharedPtr rf_sub_;
+  rclcpp::Subscription<std_msgs::msg::String>::SharedPtr       ack_sub_;
+  rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr          wave_sub_;
   rclcpp::TimerBase::SharedPtr timer_;
 
   std::map<uint32_t, FusedState> fused_targets_;
@@ -275,6 +343,7 @@ private:
     rclcpp::Publisher<acsdg_msgs::msg::FusedTarget>::SharedPtr> target_pubs_;
 
   uint32_t next_id_;
+  std::set<uint32_t> killed_ids_;
 };
 
 }  // namespace acsdg_sensors

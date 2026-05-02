@@ -25,6 +25,9 @@
 #include <rclcpp/rclcpp.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <geometry_msgs/msg/point.hpp>
+#include <geometry_msgs/msg/twist.hpp>
+#include <nav_msgs/msg/odometry.hpp>
+#include <std_msgs/msg/string.hpp>
 #include <acsdg_msgs/msg/engagement_order.hpp>
 #include <acsdg_msgs/msg/fused_target.hpp>
 #include <mavros_msgs/srv/set_mode.hpp>
@@ -32,6 +35,7 @@
 #include <chrono>
 #include <cmath>
 #include <memory>
+#include <sstream>
 #include <string>
 
 using namespace std::chrono_literals;
@@ -40,8 +44,6 @@ using namespace std::chrono_literals;
 
 class InterceptorControllerNode : public rclcpp::Node
 {
-  // Proportional navigation constant
-  static constexpr double kN           = 3.0;
   // Maximum commanded speed (m/s)
   static constexpr double kMaxSpeed    = 15.0;
   // Neutralisation radius (m) — "target hit" when within this range
@@ -50,6 +52,13 @@ class InterceptorControllerNode : public rclcpp::Node
   static constexpr int    kLostTicks   = 40;   // 40 × 50 ms = 2 s
   // Control loop period
   static constexpr double kDt          = 0.05; // seconds (20 Hz)
+  // Cruise altitude — matches enemy_driver_node's TARGET_ALTITUDE so
+  // pursuit collapses to a 2D problem and the controller doesn't have
+  // to chase noisy enemy z. Altitude is held by an outer P loop, not
+  // by the pursuit term.
+  static constexpr double kCruiseZ     = 50.0;
+  static constexpr double kAltKp       = 0.5;
+  static constexpr double kMaxVz       = 3.0;
 
 public:
   InterceptorControllerNode() : rclcpp::Node("interceptor_controller_node")
@@ -76,11 +85,35 @@ public:
     std::string pos_topic = "/interceptors/unit_" + std::to_string(id_) + "/position";
     position_pub_ = create_publisher<geometry_msgs::msg::Point>(pos_topic, 10);
 
+    // Engagement-outcome acknowledgement (consumed by mission_manager + c2_engine)
+    ack_pub_ = create_publisher<std_msgs::msg::String>("/mission/engagement_ack", 10);
+
+    // Gazebo velocity command — picked up by gz_bridge_shim and forwarded
+    // to /model/interceptor_{id}/cmd_vel on the Gazebo transport side.
+    std::string cmd_topic = "/interceptor_" + std::to_string(id_) + "/cmd_vel";
+    cmd_vel_pub_ = create_publisher<geometry_msgs::msg::Twist>(cmd_topic, 10);
+
     // ── Subscriptions ─────────────────────────────────────────────────────
     order_sub_ = create_subscription<acsdg_msgs::msg::EngagementOrder>(
       "/c2/engagement_orders", 10,
       [this](acsdg_msgs::msg::EngagementOrder::SharedPtr msg) {
         onOrder(msg);
+      });
+
+    // Self-odometry feedback. Without this the controller dead-reckons from
+    // home via integration of its own commanded velocity, and the kill-
+    // radius check compares two fictional positions (internal pos_ vs fused
+    // target). In practice this caused NEUTRALIZED acks with the real
+    // Gazebo body nowhere near the enemy. Overwriting pos_ from odom on
+    // every message makes the kill check a real physical-proximity test.
+    std::string odom_topic = "/model/interceptor_" + std::to_string(id_) + "/odometry";
+    odom_sub_ = create_subscription<nav_msgs::msg::Odometry>(
+      odom_topic, rclcpp::QoS(10),
+      [this](nav_msgs::msg::Odometry::SharedPtr m) {
+        pos_x_ = m->pose.pose.position.x;
+        pos_y_ = m->pose.pose.position.y;
+        pos_z_ = m->pose.pose.position.z;
+        has_odom_ = true;
       });
 
     // ── MAVROS set_mode client (optional — fails silently without MAVROS) ─
@@ -107,9 +140,14 @@ private:
       return;  // already on this target
     }
 
-    target_id_  = static_cast<int>(msg->target_id);
-    pursuing_   = true;
-    lost_ticks_ = 0;
+    target_id_        = static_cast<int>(msg->target_id);
+    pursuing_         = true;
+    lost_ticks_       = 0;
+    // Cached target position is stale (may equal our own position if this
+    // controller just killed the previous target). Block pursuit until the
+    // first onTarget() from the new subscription lands, otherwise the kill-
+    // radius check fires instantly and we spin in a neutralise loop.
+    has_target_data_  = false;
 
     // Drop old subscription and subscribe to the assigned target
     target_sub_.reset();
@@ -135,23 +173,38 @@ private:
     tgt_vx_ = msg->velocity.x;
     tgt_vy_ = msg->velocity.y;
     tgt_vz_ = msg->velocity.z;
-    lost_ticks_ = 0;  // refresh watchdog
+    lost_ticks_      = 0;  // refresh watchdog
+    has_target_data_ = true;
   }
 
   // ── 20 Hz control step ────────────────────────────────────────────────
 
   void controlStep()
   {
+    // Hold until we know where we actually are — pos_ defaults to home,
+    // which is not where the Gazebo body spawns, so commanding velocity
+    // against that stale belief drifts the body off course.
+    if (!has_odom_) {
+      publishCmdVel(0.0, 0.0, 0.0);
+      return;
+    }
+
     if (pursuing_) {
       ++lost_ticks_;
       if (lost_ticks_ > kLostTicks) {
         RCLCPP_INFO(get_logger(),
           "Interceptor #%d: target #%d lost — returning home", id_, target_id_);
-        pursuing_ = false;
+        publishAck(target_id_, "LOST");
+        pursuing_        = false;
+        has_target_data_ = false;
         target_sub_.reset();
         returnHome();
-      } else {
+      } else if (has_target_data_) {
         pursueTarget();
+      } else {
+        // Assigned but no FusedTarget received yet — hold position.
+        publishSetpoint(pos_x_, pos_y_, pos_z_);
+        publishCmdVel(0.0, 0.0, 0.0);
       }
     } else {
       stepTowardHome();
@@ -161,7 +214,11 @@ private:
     publishPosition();
   }
 
-  // ── Proportional navigation guidance ─────────────────────────────────
+  // ── Lead-pursuit guidance ────────────────────────────────────────────
+  // Aim at where the target will be after t_go = range / max_speed seconds.
+  // Simpler and better-behaved than the open-loop PN that preceded this:
+  // without interceptor-velocity feedback the LOS-rate term was degenerate,
+  // collapsing the guidance law to pure pursuit (tail-chase geometry).
 
   void pursueTarget()
   {
@@ -172,54 +229,41 @@ private:
 
     if (range < kKillRadius) {
       RCLCPP_INFO(get_logger(),
-        "Interceptor #%d: NEUTRALISED target #%d", id_, target_id_);
-      pursuing_ = false;
+        "Interceptor #%d: NEUTRALISED target #%d at range=%.2fm "
+        "int(%.1f,%.1f,%.1f) tgt(%.1f,%.1f,%.1f)",
+        id_, target_id_, range,
+        pos_x_, pos_y_, pos_z_, tgt_x_, tgt_y_, tgt_z_);
+      publishAck(target_id_, "NEUTRALIZED");
+      pursuing_        = false;
+      has_target_data_ = false;
       target_sub_.reset();
       publishSetpoint(pos_x_, pos_y_, pos_z_);
+      publishCmdVel(0.0, 0.0, 0.0);
       return;
     }
 
-    // Unit range vector (interceptor → target)
-    const double rux = rx / range;
-    const double ruy = ry / range;
-    const double ruz = rz / range;
+    // 2D lead pursuit — predict target xy after t_go seconds, fly toward
+    // that lead point at max speed. Altitude is handled separately by the
+    // outer altitude-hold loop below.
+    const double range_xy = std::sqrt(rx*rx + ry*ry);
+    const double t_go     = range_xy / kMaxSpeed;
+    const double lead_x   = tgt_x_ + tgt_vx_ * t_go;
+    const double lead_y   = tgt_y_ + tgt_vy_ * t_go;
 
-    // Closing velocity = -dR/dt ≈ -(relative_vel · range_unit)
-    const double rel_vx = tgt_vx_;   // interceptor velocity not fed back
-    const double rel_vy = tgt_vy_;   // in this open-loop sim
-    const double rel_vz = tgt_vz_;
-    const double vc = -(rel_vx*rux + rel_vy*ruy + rel_vz*ruz);
+    const double dx   = lead_x - pos_x_;
+    const double dy   = lead_y - pos_y_;
+    const double dmag = std::sqrt(dx*dx + dy*dy);
+    const double s    = (dmag > 1e-6) ? (kMaxSpeed / dmag) : 0.0;
 
-    // Line-of-sight rotation rate vector (cross-product approximation)
-    // ω_LOS = (R × Vrel) / R²
-    const double omega_x = (ry*rel_vz - rz*rel_vy) / (range*range);
-    const double omega_y = (rz*rel_vx - rx*rel_vz) / (range*range);
-    const double omega_z = (rx*rel_vy - ry*rel_vx) / (range*range);
-    const double omega   = std::sqrt(omega_x*omega_x + omega_y*omega_y + omega_z*omega_z);
-
-    // Commanded acceleration magnitude: a = N * Vc * ωLOS
-    // Direction: perpendicular to LOS (simplified: along LOS toward target)
-    const double a_mag = kN * std::max(1.0, std::abs(vc)) * omega;
-
-    // Decompose: blend proportional (toward target) + lateral correction
-    double cmd_x = kN * std::max(1.0, std::abs(vc)) * rux;
-    double cmd_y = kN * std::max(1.0, std::abs(vc)) * ruy;
-    double cmd_z = kN * std::max(1.0, std::abs(vc)) * ruz;
-    (void)a_mag;  // used implicitly via omega scaling above
-
-    // Clamp to max speed
-    const double cmd_spd = std::sqrt(cmd_x*cmd_x + cmd_y*cmd_y + cmd_z*cmd_z);
-    if (cmd_spd > kMaxSpeed) {
-      const double s = kMaxSpeed / cmd_spd;
-      cmd_x *= s;  cmd_y *= s;  cmd_z *= s;
-    }
-
-    // Integrate position (forward Euler, kDt = 50 ms)
-    pos_x_ += cmd_x * kDt;
-    pos_y_ += cmd_y * kDt;
-    pos_z_ += cmd_z * kDt;
+    const double vx = dx * s;
+    const double vy = dy * s;
+    // Hold cruise altitude — clamped for safety even though kAltKp keeps
+    // the loop tame.
+    const double vz = std::clamp(kAltKp * (kCruiseZ - pos_z_),
+                                 -kMaxVz, kMaxVz);
 
     publishSetpoint(pos_x_, pos_y_, pos_z_);
+    publishCmdVel(vx, vy, vz);
   }
 
   void stepTowardHome()
@@ -229,13 +273,14 @@ private:
     const double dz = home_z_ - pos_z_;
     const double dist = std::sqrt(dx*dx + dy*dy + dz*dz);
     if (dist < 0.5) {
-      pos_x_ = home_x_;  pos_y_ = home_y_;  pos_z_ = home_z_;
+      publishCmdVel(0.0, 0.0, 0.0);
       return;
     }
-    const double step = std::min(5.0 * kDt, dist);  // 5 m/s return speed
-    pos_x_ += (dx / dist) * step;
-    pos_y_ += (dy / dist) * step;
-    pos_z_ += (dz / dist) * step;
+    const double kReturnSpeed = 5.0;  // m/s
+    const double vx = (dx / dist) * kReturnSpeed;
+    const double vy = (dy / dist) * kReturnSpeed;
+    const double vz = (dz / dist) * kReturnSpeed;
+    publishCmdVel(vx, vy, vz);
   }
 
   void returnHome() { /* state already set — stepTowardHome() handles it */ }
@@ -259,6 +304,26 @@ private:
     geometry_msgs::msg::Point pt;
     pt.x = pos_x_;  pt.y = pos_y_;  pt.z = pos_z_;
     position_pub_->publish(pt);
+  }
+
+  void publishCmdVel(double vx, double vy, double vz)
+  {
+    geometry_msgs::msg::Twist t;
+    t.linear.x = vx;
+    t.linear.y = vy;
+    t.linear.z = vz;
+    cmd_vel_pub_->publish(t);
+  }
+
+  void publishAck(int target_id, const std::string & outcome)
+  {
+    std::ostringstream oss;
+    oss << "{\"target_id\":" << target_id
+        << ",\"interceptor_id\":" << id_
+        << ",\"outcome\":\"" << outcome << "\"}";
+    std_msgs::msg::String msg;
+    msg.data = oss.str();
+    ack_pub_->publish(msg);
   }
 
   void requestOffboard()
@@ -288,11 +353,17 @@ private:
   double tgt_x_{0}, tgt_y_{0}, tgt_z_{0};
   double tgt_vx_{0}, tgt_vy_{0}, tgt_vz_{0};
   int    lost_ticks_{0};
+  bool   has_target_data_{false};
+
+  bool   has_odom_{false};
 
   rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr setpoint_pub_;
   rclcpp::Publisher<geometry_msgs::msg::Point>::SharedPtr       position_pub_;
+  rclcpp::Publisher<std_msgs::msg::String>::SharedPtr           ack_pub_;
+  rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr       cmd_vel_pub_;
   rclcpp::Subscription<acsdg_msgs::msg::EngagementOrder>::SharedPtr order_sub_;
   rclcpp::Subscription<acsdg_msgs::msg::FusedTarget>::SharedPtr     target_sub_;
+  rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr          odom_sub_;
   rclcpp::Client<mavros_msgs::srv::SetMode>::SharedPtr              mode_client_;
   rclcpp::TimerBase::SharedPtr                                      timer_;
 };

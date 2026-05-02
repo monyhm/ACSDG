@@ -5,6 +5,19 @@
 
     <!-- ── Main body ─────────────────────────────────────────────────── -->
     <link name="base_link">
+      <!-- Kinematic velocity-controlled body (see plugin below); gravity
+           would fight the velocity plugin between command ticks and drag
+           the drone to z=0 whenever cmd_vel stops arriving. -->
+      <gravity>false</gravity>
+      <!-- High angular damping. gz-sim-velocity-control-system in Harmonic
+           does not reset angular velocity per tick — without damping the
+           body picks up rotational momentum from numerical noise and
+           tumbles indefinitely (no rotational friction with gravity off),
+           which then aliases world-frame cmd_vel into wrong directions. -->
+      <velocity_decay>
+        <linear>0</linear>
+        <angular>10</angular>
+      </velocity_decay>
       <inertial>
         <mass>2.5</mass>
         <inertia>
@@ -86,6 +99,7 @@
     <!-- ── Rotor links + joints ───────────────────────────────────────── -->
     <link name="rotor_0">
       <pose>0.28 0.28 0.03 0 0 0</pose>
+      <gravity>false</gravity>
       <inertial><mass>0.04</mass><inertia><ixx>9.75e-06</ixx><ixy>0</ixy><ixz>0</ixz><iyy>0.000166704</iyy><iyz>0</iyz><izz>0.000167604</izz></inertia></inertial>
     </link>
     <joint name="rotor_0_joint" type="revolute">
@@ -95,6 +109,7 @@
 
     <link name="rotor_1">
       <pose>-0.28 0.28 0.03 0 0 0</pose>
+      <gravity>false</gravity>
       <inertial><mass>0.04</mass><inertia><ixx>9.75e-06</ixx><ixy>0</ixy><ixz>0</ixz><iyy>0.000166704</iyy><iyz>0</iyz><izz>0.000167604</izz></inertia></inertial>
     </link>
     <joint name="rotor_1_joint" type="revolute">
@@ -104,6 +119,7 @@
 
     <link name="rotor_2">
       <pose>0.28 -0.28 0.03 0 0 0</pose>
+      <gravity>false</gravity>
       <inertial><mass>0.04</mass><inertia><ixx>9.75e-06</ixx><ixy>0</ixy><ixz>0</ixz><iyy>0.000166704</iyy><iyz>0</iyz><izz>0.000167604</izz></inertia></inertial>
     </link>
     <joint name="rotor_2_joint" type="revolute">
@@ -113,6 +129,7 @@
 
     <link name="rotor_3">
       <pose>-0.28 -0.28 0.03 0 0 0</pose>
+      <gravity>false</gravity>
       <inertial><mass>0.04</mass><inertia><ixx>9.75e-06</ixx><ixy>0</ixy><ixz>0</ixz><iyy>0.000166704</iyy><iyz>0</iyz><izz>0.000167604</izz></inertia></inertial>
     </link>
     <joint name="rotor_3_joint" type="revolute">
@@ -120,70 +137,20 @@
       <axis><xyz>0 0 1</xyz><limit><lower>-1e+16</lower><upper>1e+16</upper></limit></axis>
     </joint>
 
-    <!-- ── Motor plugins (scaled for 2.5kg) ──────────────────────────── -->
-    <plugin filename="gz-sim-multicopter-motor-model-system"
-      name="gz::sim::systems::MulticopterMotorModel">
-      <jointName>rotor_0_joint</jointName><linkName>rotor_0</linkName>
-      <turningDirection>ccw</turningDirection>
-      <timeConstantUp>0.0125</timeConstantUp><timeConstantDown>0.025</timeConstantDown>
-      <maxRotVelocity>1000.0</maxRotVelocity>
-      <motorConstant>1.2e-05</motorConstant><momentConstant>0.016</momentConstant>
-      <commandSubTopic>command/motor_speed</commandSubTopic>
-      <motorNumber>0</motorNumber>
-      <rotorDragCoefficient>8.06428e-05</rotorDragCoefficient>
-      <rollingMomentCoefficient>1e-06</rollingMomentCoefficient>
-      <rotorVelocitySlowdownSim>10</rotorVelocitySlowdownSim>
-      <motorType>velocity</motorType>
-    </plugin>
-    <plugin filename="gz-sim-multicopter-motor-model-system"
-      name="gz::sim::systems::MulticopterMotorModel">
-      <jointName>rotor_1_joint</jointName><linkName>rotor_1</linkName>
-      <turningDirection>ccw</turningDirection>
-      <timeConstantUp>0.0125</timeConstantUp><timeConstantDown>0.025</timeConstantDown>
-      <maxRotVelocity>1000.0</maxRotVelocity>
-      <motorConstant>1.2e-05</motorConstant><momentConstant>0.016</momentConstant>
-      <commandSubTopic>command/motor_speed</commandSubTopic>
-      <motorNumber>1</motorNumber>
-      <rotorDragCoefficient>8.06428e-05</rotorDragCoefficient>
-      <rollingMomentCoefficient>1e-06</rollingMomentCoefficient>
-      <rotorVelocitySlowdownSim>10</rotorVelocitySlowdownSim>
-      <motorType>velocity</motorType>
-    </plugin>
-    <plugin filename="gz-sim-multicopter-motor-model-system"
-      name="gz::sim::systems::MulticopterMotorModel">
-      <jointName>rotor_2_joint</jointName><linkName>rotor_2</linkName>
-      <turningDirection>cw</turningDirection>
-      <timeConstantUp>0.0125</timeConstantUp><timeConstantDown>0.025</timeConstantDown>
-      <maxRotVelocity>1000.0</maxRotVelocity>
-      <motorConstant>1.2e-05</motorConstant><momentConstant>0.016</momentConstant>
-      <commandSubTopic>command/motor_speed</commandSubTopic>
-      <motorNumber>2</motorNumber>
-      <rotorDragCoefficient>8.06428e-05</rotorDragCoefficient>
-      <rollingMomentCoefficient>1e-06</rollingMomentCoefficient>
-      <rotorVelocitySlowdownSim>10</rotorVelocitySlowdownSim>
-      <motorType>velocity</motorType>
-    </plugin>
-    <plugin filename="gz-sim-multicopter-motor-model-system"
-      name="gz::sim::systems::MulticopterMotorModel">
-      <jointName>rotor_3_joint</jointName><linkName>rotor_3</linkName>
-      <turningDirection>cw</turningDirection>
-      <timeConstantUp>0.0125</timeConstantUp><timeConstantDown>0.025</timeConstantDown>
-      <maxRotVelocity>1000.0</maxRotVelocity>
-      <motorConstant>1.2e-05</motorConstant><momentConstant>0.016</momentConstant>
-      <commandSubTopic>command/motor_speed</commandSubTopic>
-      <motorNumber>3</motorNumber>
-      <rotorDragCoefficient>8.06428e-05</rotorDragCoefficient>
-      <rollingMomentCoefficient>1e-06</rollingMomentCoefficient>
-      <rotorVelocitySlowdownSim>10</rotorVelocitySlowdownSim>
-      <motorType>velocity</motorType>
+    <!-- ── Velocity control (replaced 4× multicopter-motor-model because
+             nothing was publishing motor-speed commands; the interceptor
+             controller drives body-frame velocity instead). ────────────── -->
+    <plugin filename="gz-sim-velocity-control-system"
+      name="gz::sim::systems::VelocityControl">
     </plugin>
 
-    <!-- Odometry publisher -->
+    <!-- Odometry publisher (3D — default is 2D, which zeroes pose.z) -->
     <plugin filename="gz-sim-odometry-publisher-system"
       name="gz::sim::systems::OdometryPublisher">
       <odom_frame>world</odom_frame>
       <robot_base_frame>interceptor_drone</robot_base_frame>
       <odom_publish_frequency>50</odom_publish_frequency>
+      <dimensions>3</dimensions>
     </plugin>
 
   </model>

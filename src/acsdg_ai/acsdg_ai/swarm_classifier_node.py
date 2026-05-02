@@ -254,6 +254,14 @@ class SwarmClassifierNode(Node):
                   if t.get('state') in ('DETECTED', 'TARGETED')}
 
         if len(active) < MIN_DRONES:
+            # Publish an explicit UNKNOWN so downstream consumers (dashboard,
+            # learning_node) see a fresh value instead of stale classification
+            # from the last time there were enough drones to classify.
+            quiet = SwarmClassification()
+            quiet.tactic     = 'UNKNOWN'
+            quiet.confidence = 0.0
+            quiet.decoy_ids  = []
+            self._cls_pub.publish(quiet)
             return
 
         drones = []

@@ -12,5 +12,8 @@ install(PROGRAMS scripts/spawn_px4_sitl.sh
 install(PROGRAMS scripts/enemy_driver_node.py
   DESTINATION lib/${PROJECT_NAME}
   RENAME enemy_driver_node)
+install(PROGRAMS scripts/gz_bridge_shim.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME gz_bridge_shim)
 
 ament_package()

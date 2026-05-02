@@ -54,7 +54,12 @@ SEQ_LEN  = 20   # frames kept per target
 IN_FEATS = 6    # x, y, z, vx, vy, vz
 
 MODEL_DIR = pathlib.Path.home() / '.ros' / 'acsdg_ai' / 'models'
-MODEL_PATH = MODEL_DIR / 'lstm_intent.pt'
+# Bumped filename to invalidate the old weights trained on repeat-last-position
+# labels (the path head output was noise regardless of input).
+MODEL_PATH = MODEL_DIR / 'lstm_intent_v2.pt'
+
+# Path-prediction horizon: 5 waypoints × PATH_DT seconds between them.
+PATH_DT = 1.0
 
 
 class LSTMIntentModel(nn.Module):
@@ -306,14 +311,24 @@ class ThreatPredictorNode(Node):
             perm = torch.randperm(N)
             total_loss = 0.0
             batches = 0
+            # Time offsets (1..5) × PATH_DT — used to integrate last observed
+            # velocity forward to build honest path-prediction targets.
+            t_vec = torch.arange(1, 6, dtype=torch.float32).view(1, 5, 1) * PATH_DT
+
             for start in range(0, N, BATCH):
                 idx = perm[start:start + BATCH]
                 xb  = X[idx]; yb = Y[idx]
                 optimizer.zero_grad()
                 with self._model_lock:
                     path_pred, intent_pred = self._model(xb)
-                # Dummy path target: repeat last position 5 times
-                path_tgt = xb[:, -1, :3].unsqueeze(1).expand(-1, 5, 3)
+                # Real path target: integrate last observed velocity forward.
+                # A straight-line extrapolation is imperfect for curved
+                # trajectories (RECON circles, DECOY wiggles) but vastly
+                # better than the repeat-last-position stub it replaces —
+                # the model now learns to project along velocity direction.
+                last_pos = xb[:, -1, :3].unsqueeze(1)    # (B, 1, 3)
+                last_vel = xb[:, -1, 3:6].unsqueeze(1)   # (B, 1, 3)
+                path_tgt = last_pos + last_vel * t_vec   # (B, 5, 3)
                 loss = ce_loss(intent_pred, yb) + 0.1 * mse_loss(path_pred, path_tgt)
                 loss.backward()
                 optimizer.step()
