@@ -1,8 +1,4 @@
-"""Weapon abstractions for the ACSDG C2 layer.
-
-Phase 1 only exports the domain types and the abstract base class;
-later phases add concrete WeaponSystem subclasses (Anvil, Coyote, etc.).
-"""
+"""Weapon abstractions for the ACSDG C2 layer."""
 
 from acsdg_c2.weapons.types import (
     TargetClass,
@@ -10,5 +6,10 @@ from acsdg_c2.weapons.types import (
     Track,
     WeaponState,
 )
+from acsdg_c2.weapons.base import WeaponSystem
+from acsdg_c2.weapons.anvil import Anvil
 
-__all__ = ["TargetClass", "EngagementEnvelope", "Track", "WeaponState"]
+__all__ = [
+    "TargetClass", "EngagementEnvelope", "Track", "WeaponState",
+    "WeaponSystem", "Anvil",
+]
