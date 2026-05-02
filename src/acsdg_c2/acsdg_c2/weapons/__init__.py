@@ -8,8 +8,9 @@ from acsdg_c2.weapons.types import (
 )
 from acsdg_c2.weapons.base import WeaponSystem
 from acsdg_c2.weapons.anvil import Anvil
+from acsdg_c2.weapons.coyote import Coyote
 
 __all__ = [
     "TargetClass", "EngagementEnvelope", "Track", "WeaponState",
-    "WeaponSystem", "Anvil",
+    "WeaponSystem", "Anvil", "Coyote",
 ]
