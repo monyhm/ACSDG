@@ -4,10 +4,11 @@ c2_engine_node.py -- Modular threat scoring + weapon-target assignment.
 
 Phase 2 of the AI-orchestrated heterogeneous-defense upgrade. This node
 composes per-module abstractions (classifier, cost_function, assignment,
-dispatcher) and a registry of WeaponSystem instances. Phase 2 inventory is
-1 Raytheon Coyote Block 2 (NE post) + 3 Anduril Anvil quadcopters
-(NW/SE/SW posts). Phase 1 was 4 Anvils; Phase 3 will add a DroneHunter F700
-and Phase 4 a Skyranger 30 — both via the same WeaponSystem ABC.
+dispatcher) and a registry of WeaponSystem instances. Inventory is composed
+from `acsdg_c2.fleet.FLEET` — see that module for the current slot table.
+Phase 1 was 4 Anvils; Phase 2 swapped slot 1 for a Coyote Block 2; Phase 3
+adds DroneHunter F700; Phase 4 swaps in Skyranger 30 — all via the
+WeaponSystem ABC.
 
 Subscribes
 ----------

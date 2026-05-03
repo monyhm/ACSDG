@@ -1,7 +1,4 @@
 """Test that C2EngineNode builds its weapon list from FLEET, not from a literal block."""
-import pytest
-
-from acsdg_c2.fleet import FLEET
 
 
 def test_c2_engine_weapons_match_fleet():
