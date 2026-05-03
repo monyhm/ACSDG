@@ -85,3 +85,22 @@ def test_anvil_time_to_intercept_uses_max_speed_and_closing_rate():
     track = make_track(pos=(500.0, 0.0, 20.0), vel=(-5.0, 0.0, 0.0))
     # eff_speed = max_speed (45) + closing (5) = 50; t = 500 / 50 = 10 s
     assert a.time_to_intercept(track) == pytest.approx(10.0, rel=0.01)
+
+
+def test_anvil_time_to_intercept_clamps_eff_speed_for_fleeing_target():
+    """Stern-aspect target faster than Anvil should yield a finite, > range/max_speed
+    ToI, not the eff_speed=1.0 blow-up. Closes N-C from Phase 2 review."""
+    anvil = Anvil(weapon_id="anvil_test", home_position=(0.0, 0.0, 20.0))
+    fleeing = Track(
+        track_id=1,
+        position=(100.0, 0.0, 20.0),
+        velocity=(50.0, 0.0, 0.0),       # 50 m/s away, faster than Anvil's 45 m/s max
+        threat_score=0.0, state="DETECTED",
+    )
+    toi = anvil.time_to_intercept(fleeing)
+    # Expected ≈ range / (0.5 * 45) = 100 / 22.5 ≈ 4.44 s
+    assert 4.0 < toi < 5.0, f"Got {toi}, expected ~4.44 s"
+    # Sanity: must exceed range/max_speed (= 100/45 ≈ 2.22 s) — clamp must engage
+    assert toi > 100.0 / 45.0
+    # Regression check: must NOT be range/1.0 = 100 s (the old buggy floor)
+    assert toi < 50.0, f"Got {toi} — eff_speed=1.0 floor regression"

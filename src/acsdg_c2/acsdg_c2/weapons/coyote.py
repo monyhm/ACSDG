@@ -102,7 +102,9 @@ class Coyote(WeaponSystem):
         v_proj = (track.velocity[0] * (-ux)
                   + track.velocity[1] * (-uy)
                   + track.velocity[2] * (-uz))
-        eff_speed = max(1.0, _COYOTE_MAX_SPEED + v_proj)
+        # Clamp eff_speed at half max — fleeing Shahed-class targets get a finite,
+        # sec-unit ToI rather than the magic eff_speed=1.0 floor that yields garbage units.
+        eff_speed = max(0.5 * _COYOTE_MAX_SPEED, _COYOTE_MAX_SPEED + v_proj)
         return d / eff_speed
 
     def resource_cost(self) -> float:

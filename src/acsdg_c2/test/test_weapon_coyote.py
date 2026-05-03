@@ -107,3 +107,20 @@ def test_coyote_state_marks_one_shot():
     assert s.weapon_id == "coyote_0"
     assert s.weapon_type == "frag_jet"
     assert s.ammo_remaining is None   # one-shot, like Anvil
+
+
+def test_coyote_time_to_intercept_clamps_eff_speed_for_stern_shahed():
+    """SHAHED at 185 m/s tail-chase against 160 m/s Coyote — eff_speed should clamp at 80 m/s,
+    not the historical 1.0 m/s blow-up. Closes N-C."""
+    coyote = Coyote(weapon_id="coyote_test", home_position=(0.0, 0.0, 20.0))
+    shahed = Track(
+        track_id=1,
+        position=(1000.0, 0.0, 50.0),
+        velocity=(185.0, 0.0, 0.0),
+        threat_score=0.0, state="DETECTED",
+    )
+    toi = coyote.time_to_intercept(shahed)
+    # Expected ≈ 1000 / (0.5 * 160) = 1000 / 80 = 12.5 s
+    assert 11.5 < toi < 14.0, f"Got {toi}, expected ~12.5 s"
+    # Regression check: original buggy code returned 1000.0 (range / 1.0)
+    assert toi < 50.0, f"Got {toi} — eff_speed=1.0 floor regression"
