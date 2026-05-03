@@ -17,6 +17,9 @@ from acsdg_c2.weapons.types import (
     WeaponState,
 )
 
+# Module-level constant: stern-aspect-target ToI floor as fraction of max_speed
+_EFF_SPEED_FLOOR_FRAC = 0.5
+
 
 class WeaponSystem(ABC):
 
@@ -88,3 +91,13 @@ class WeaponSystem(ABC):
         per-class `if/elif` ladders as new weapons are added.
         """
         return []
+
+    def _clamp_eff_speed(self, max_speed: float, v_proj: float) -> float:
+        """Effective closing speed for time_to_intercept, clamped at half max_speed.
+
+        For closing engagements (v_proj > 0), returns max_speed + v_proj.
+        For stern-aspect / fleeing targets where max_speed + v_proj < 0.5*max_speed,
+        returns 0.5*max_speed — yielding a finite, seconds-unit ToI rather than the
+        eff_speed=1.0 sentinel that produced garbage units in the cost matrix.
+        """
+        return max(_EFF_SPEED_FLOOR_FRAC * max_speed, max_speed + v_proj)

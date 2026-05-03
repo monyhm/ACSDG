@@ -98,8 +98,8 @@ def test_anvil_time_to_intercept_clamps_eff_speed_for_fleeing_target():
         threat_score=0.0, state="DETECTED",
     )
     toi = anvil.time_to_intercept(fleeing)
-    # Expected ≈ range / (0.5 * 45) = 100 / 22.5 ≈ 4.44 s
-    assert 4.0 < toi < 5.0, f"Got {toi}, expected ~4.44 s"
+    # Expected ≈ range / (0.5 * 45) = 100 / 22.5 ≈ 4.444 s
+    assert toi == pytest.approx(4.444, rel=0.01), f"Got {toi}, expected ~4.444 s"
     # Sanity: must exceed range/max_speed (= 100/45 ≈ 2.22 s) — clamp must engage
     assert toi > 100.0 / 45.0
     # Regression check: must NOT be range/1.0 = 100 s (the old buggy floor)

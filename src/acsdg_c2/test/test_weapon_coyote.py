@@ -121,6 +121,7 @@ def test_coyote_time_to_intercept_clamps_eff_speed_for_stern_shahed():
     )
     toi = coyote.time_to_intercept(shahed)
     # Expected ≈ 1000 / (0.5 * 160) = 1000 / 80 = 12.5 s
-    assert 11.5 < toi < 14.0, f"Got {toi}, expected ~12.5 s"
+    assert toi == pytest.approx(12.5, rel=0.01), f"Got {toi}, expected ~12.5 s"
     # Regression check: original buggy code returned 1000.0 (range / 1.0)
     assert toi < 50.0, f"Got {toi} — eff_speed=1.0 floor regression"
+    assert toi > 1000.0 / 160.0   # clamp engaged: actual ToI exceeds unclamped range/max_speed
