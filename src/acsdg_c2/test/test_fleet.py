@@ -127,7 +127,13 @@ def test_bridged_models_returns_kind_and_max_instance_index():
 
 
 def test_bridged_models_for_phase3_inventory():
-    """Phase 3 FLEET = 1 Coyote (gz instance 1) + 1 DroneHunter (gz instance 1)
+    """Phase 3 FLEET = 1 Coyote (gz instance 1) + 1 DroneHunter (gz instance 3)
     + 2 Anvils (gz instances 2 and 4) → bridged_models returns the max instance
-    index per kind, sorted alphabetically."""
-    assert bridged_models() == (('coyote', 1), ('dronehunter', 1), ('interceptor', 4))
+    index per kind, sorted alphabetically.
+
+    DroneHunter's gz_instance_index=3 matches its interceptor_id so the
+    WeaponControllerBase's id_-based topic naming resolves correctly to
+    /model/dronehunter_3/odometry. (Slot 1's gz_instance_index=1 was
+    convenient but caused topic mismatches discovered during Task 7 live demo.)
+    """
+    assert bridged_models() == (('coyote', 1), ('dronehunter', 3), ('interceptor', 4))

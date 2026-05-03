@@ -536,10 +536,13 @@
       <pose>-177 177 20 0 0 0</pose>
     </include>
 
-    <!-- DroneHunter F700 at defense post SE (replaces interceptor_3 in Phase 3) -->
+    <!-- DroneHunter F700 at defense post SE (replaces interceptor_3 in Phase 3).
+         gz_instance_index=3 matches FLEET slot 3's interceptor_id, so the
+         WeaponControllerBase's topic-prefix-by-id_ wiring resolves correctly
+         to /model/dronehunter_3/odometry and /dronehunter_3/cmd_vel. -->
     <include>
       <uri>model://dronehunter_f700</uri>
-      <name>dronehunter_1</name>
+      <name>dronehunter_3</name>
       <pose>177 -177 20 0 0 0</pose>
     </include>
 

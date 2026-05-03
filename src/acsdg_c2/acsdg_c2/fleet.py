@@ -56,7 +56,7 @@ def _validate_fleet(fleet: Tuple[Slot, ...]) -> None:
 FLEET: Tuple[Slot, ...] = (
     Slot(1, Coyote,      "coyote_0",      "coyote_controller_node",       "coyote",       1, ( 177.0,  177.0, 20.0)),
     Slot(2, Anvil,       "anvil_1",       "interceptor_controller_node",  "interceptor",  2, (-177.0,  177.0, 20.0)),
-    Slot(3, DroneHunter, "dronehunter_0", "dronehunter_controller_node",  "dronehunter",  1, ( 177.0, -177.0, 20.0)),
+    Slot(3, DroneHunter, "dronehunter_0", "dronehunter_controller_node",  "dronehunter",  3, ( 177.0, -177.0, 20.0)),
     Slot(4, Anvil,       "anvil_3",       "interceptor_controller_node",  "interceptor",  4, (-177.0, -177.0, 20.0)),
 )
 
