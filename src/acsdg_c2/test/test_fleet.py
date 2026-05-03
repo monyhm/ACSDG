@@ -2,7 +2,7 @@
 import pytest
 from pathlib import Path
 
-from acsdg_c2.fleet import FLEET, Slot, _validate_fleet, assert_matches_sdf, parse_sdf_includes
+from acsdg_c2.fleet import FLEET, Slot, _validate_fleet, assert_matches_sdf, bridged_models, parse_sdf_includes
 from acsdg_c2.weapons import Anvil
 
 
@@ -110,3 +110,23 @@ def test_assert_matches_sdf_raises_on_disagreement(tmp_path):
     )
     with pytest.raises(AssertionError, match="coyote_1"):
         assert_matches_sdf(str(bad_sdf))
+
+
+def test_bridged_models_returns_kind_and_max_instance_index():
+    pairs = bridged_models()
+    pair_dict = dict(pairs)
+    # Every kind in FLEET must appear with index ≥ max(gz_instance_index for that kind)
+    expected: dict[str, int] = {}
+    for slot in FLEET:
+        expected[slot.gz_model_kind] = max(
+            expected.get(slot.gz_model_kind, 0), slot.gz_instance_index)
+    for kind, max_idx in expected.items():
+        assert pair_dict[kind] == max_idx
+    # Pairs are sorted alphabetically by kind for stable bridge wiring
+    assert list(pairs) == sorted(pairs)
+
+
+def test_bridged_models_for_phase2_inventory():
+    """Today's FLEET = 1 Coyote at instance 1 + 3 Anvils at instance 2..4
+    → bridged_models = (('coyote', 1), ('interceptor', 4))."""
+    assert bridged_models() == (('coyote', 1), ('interceptor', 4))

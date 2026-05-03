@@ -113,3 +113,20 @@ def assert_matches_sdf(sdf_path: str, abs_tol: float = 0.01) -> None:
             assert abs(sv - hv) <= abs_tol, (
                 f"{name}: SDF.{axis}={sv} disagrees with FLEET.home.{axis}={hv} "
                 f"(slot weapon_id={slot.weapon_id!r}, tol={abs_tol}m)")
+
+
+def bridged_models() -> Tuple[Tuple[str, int], ...]:
+    """Return (kind, max_instance_index) pairs for the gz_bridge_shim's _BRIDGED_MODELS table.
+
+    The bridge shim wires /{kind}_{i}/cmd_vel and /model/{kind}_{i}/odometry
+    for i in 1..max_instance_index. Returning the max (not the count) means
+    unused gaps in the instance numbering are still wired — which is what the
+    Phase 2 'interceptor count=4 with slot 1 unused' note documented; that
+    behavior is preserved here.
+
+    Pairs are sorted by kind for deterministic ordering in the shim.
+    """
+    by_kind: Dict[str, int] = {}
+    for s in FLEET:
+        by_kind[s.gz_model_kind] = max(by_kind.get(s.gz_model_kind, 0), s.gz_instance_index)
+    return tuple(sorted(by_kind.items()))
