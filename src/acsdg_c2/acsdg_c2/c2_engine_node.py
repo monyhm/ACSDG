@@ -34,16 +34,10 @@ from acsdg_c2.assignment import assign
 from acsdg_c2.classifier import Classifier
 from acsdg_c2.cost_function import build_cost_matrix, score_threat
 from acsdg_c2.dispatcher import Dispatcher
-from acsdg_c2.weapons import Anvil, Coyote, Track, WeaponSystem
+from acsdg_c2.fleet import FLEET, assert_matches_sdf
+from acsdg_c2.weapons import Track, WeaponSystem
 
-NUM_INTERCEPTORS = 4
-
-_DEFAULT_HOMES = [
-    ( 200.0,  200.0, 20.0),    # slot 1 — NE (Coyote in Phase 2, Anvil in Phase 1)
-    (-200.0,  200.0, 20.0),    # slot 2 — NW (Anvil)
-    ( 200.0, -200.0, 20.0),    # slot 3 — SE (Anvil)
-    (-200.0, -200.0, 20.0),    # slot 4 — SW (Anvil)
-]
+NUM_INTERCEPTORS = len(FLEET)
 
 
 class C2EngineNode(Node):
@@ -51,19 +45,30 @@ class C2EngineNode(Node):
     def __init__(self) -> None:
         super().__init__("c2_engine_node")
 
-        # ── Weapons (Phase 2: 1 Coyote + 3 Anvils) ──────────────────────
-        # Slot 0 (NE corner) is a Raytheon Coyote Block 2 frag-jet. Slots 1-3
-        # are Anduril Anvil quadcopters. Both classes implement the same
-        # WeaponSystem ABC so the dispatch loop is uniform.
-        # weapon_id naming: "coyote_0" maps via Dispatcher's numeric-tail
-        # logic to interceptor_id 1 (the legacy NE slot). Anvil 1-3 keep
-        # their previous mappings (anvil_1 → 2, anvil_2 → 3, anvil_3 → 4).
+        # ── Weapons (composed from FLEET — see acsdg_c2/fleet.py) ───────
         self._weapons: List[WeaponSystem] = [
-            Coyote(weapon_id="coyote_0", home_position=_DEFAULT_HOMES[0]),
-            Anvil(weapon_id="anvil_1",   home_position=_DEFAULT_HOMES[1]),
-            Anvil(weapon_id="anvil_2",   home_position=_DEFAULT_HOMES[2]),
-            Anvil(weapon_id="anvil_3",   home_position=_DEFAULT_HOMES[3]),
+            slot.weapon_class(weapon_id=slot.weapon_id, home_position=slot.home)
+            for slot in FLEET
         ]
+
+        # Defense in depth: catch FLEET/SDF coord drift at startup, before
+        # any controller can spawn at the wrong post. In test mode (acsdg_gazebo
+        # not installed), downgrade to a warning since the test_fleet regression
+        # test covers the same agreement check via the source-tree SDF.
+        try:
+            from ament_index_python.packages import (
+                get_package_share_directory, PackageNotFoundError)
+            sdf_path = (
+                f"{get_package_share_directory('acsdg_gazebo')}/worlds/military_base.sdf")
+            assert_matches_sdf(sdf_path)
+        except PackageNotFoundError:
+            self.get_logger().warn(
+                "acsdg_gazebo not installed — skipping FLEET/SDF agreement check "
+                "(likely test mode; CI covers this via test_fleet.py)")
+        except (AssertionError, FileNotFoundError) as exc:
+            self.get_logger().error(
+                f"FLEET/SDF agreement check failed: {exc}. C2 refusing to start.")
+            raise
 
         # -- Modules --
         self._classifier = Classifier()
