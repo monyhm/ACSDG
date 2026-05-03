@@ -29,36 +29,52 @@ foreach(node c2_engine_node interceptor_manager_node mission_manager_node)
     RENAME ${node})
 endforeach()
 
-# ── C++ node: interceptor_controller_node ────────────────────────────────
-add_executable(interceptor_controller_node src/interceptor_controller_node.cpp)
-ament_target_dependencies(interceptor_controller_node
-  rclcpp
-  acsdg_msgs
-  geometry_msgs
-  nav_msgs
-  std_msgs
-  builtin_interfaces
-  mavros_msgs
+# ── Shared base library: weapon_controller_base ──────────────────────────
+# Holds the topic plumbing, watchdog, return-to-home, and 20 Hz timer that
+# every per-weapon controller (Anvil, Coyote, Phase-3 DroneHunter, …) used
+# to duplicate. Subclasses link against this and override two virtuals.
+add_library(weapon_controller_base
+  src/weapon_controller_base.cpp
+)
+target_include_directories(weapon_controller_base PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+ament_target_dependencies(weapon_controller_base
+  rclcpp acsdg_msgs geometry_msgs nav_msgs std_msgs builtin_interfaces
 )
 
-install(TARGETS interceptor_controller_node
-  DESTINATION lib/${PROJECT_NAME})
+# ── C++ node: interceptor_controller_node (Anvil) ────────────────────────
+add_executable(interceptor_controller_node src/interceptor_controller_node.cpp)
+target_link_libraries(interceptor_controller_node weapon_controller_base)
+ament_target_dependencies(interceptor_controller_node
+  rclcpp acsdg_msgs geometry_msgs nav_msgs std_msgs builtin_interfaces
+)
 
 # ── C++ node: coyote_controller_node ─────────────────────────────────────
 add_executable(coyote_controller_node src/coyote_controller_node.cpp)
+target_link_libraries(coyote_controller_node weapon_controller_base)
 ament_target_dependencies(coyote_controller_node
-  rclcpp
-  acsdg_msgs
-  geometry_msgs
-  nav_msgs
-  std_msgs
-  builtin_interfaces
+  rclcpp acsdg_msgs geometry_msgs nav_msgs std_msgs builtin_interfaces
 )
 
-install(TARGETS coyote_controller_node
+# ── Install ──────────────────────────────────────────────────────────────
+install(DIRECTORY include/
+  DESTINATION include
+)
+
+install(TARGETS weapon_controller_base
+  EXPORT export_${PROJECT_NAME}
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION bin
+  INCLUDES DESTINATION include
+)
+
+install(TARGETS interceptor_controller_node coyote_controller_node
   DESTINATION lib/${PROJECT_NAME})
 
-# ── Launch files ──────────────────────────────────────────────────────────
+# ── Launch files ─────────────────────────────────────────────────────────
 install(DIRECTORY launch/
   DESTINATION share/${PROJECT_NAME}/launch)
 
