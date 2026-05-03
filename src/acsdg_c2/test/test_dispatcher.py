@@ -2,7 +2,7 @@
 
 Phase 3 note: interceptor_id is now FLEET-driven (not numeric-tail). All weapon_id
 strings used here must exist in fleet.FLEET. Slots at time of writing:
-  coyote_0 → 1,  anvil_1 → 2,  anvil_2 → 3,  anvil_3 → 4.
+  coyote_0 → 1,  anvil_1 → 2,  dronehunter_0 → 3,  anvil_3 → 4.
 """
 
 import pytest
@@ -27,12 +27,13 @@ def test_dispatcher_translates_anvil_dispatch_to_engagement_order_payload():
     assert order["priority"] == 127         # int(0.5 * 255) = 127
 
 
-def test_dispatcher_handles_anvil_2_maps_to_slot_3():
-    """anvil_2 is FLEET slot 3 (NW post)."""
+def test_dispatcher_handles_anvil_3_maps_to_slot_4():
+    """anvil_3 is FLEET slot 4 (SW post). Slot 3 was anvil_2 in Phase 1/2,
+    replaced by DroneHunter in Phase 3 — covered by test_dispatcher_routes_dronehunter_to_slot_3."""
     d = Dispatcher()
-    a = Anvil("anvil_2", (177.0, -177.0, 20.0))
+    a = Anvil("anvil_3", (-177.0, -177.0, 20.0))
     order = d.translate(a, make_track())
-    assert order["interceptor_id"] == 3
+    assert order["interceptor_id"] == 4
 
 
 def test_dispatcher_priority_clamps_to_uint8_range():

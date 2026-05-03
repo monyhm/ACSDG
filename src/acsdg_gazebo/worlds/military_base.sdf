@@ -536,10 +536,10 @@
       <pose>-177 177 20 0 0 0</pose>
     </include>
 
-    <!-- Interceptor 3 at defense post SE -->
+    <!-- DroneHunter F700 at defense post SE (replaces interceptor_3 in Phase 3) -->
     <include>
-      <uri>model://interceptor_drone</uri>
-      <name>interceptor_3</name>
+      <uri>model://dronehunter_f700</uri>
+      <name>dronehunter_1</name>
       <pose>177 -177 20 0 0 0</pose>
     </include>
 

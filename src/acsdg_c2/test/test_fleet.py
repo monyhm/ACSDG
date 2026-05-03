@@ -126,7 +126,8 @@ def test_bridged_models_returns_kind_and_max_instance_index():
     assert list(pairs) == sorted(pairs)
 
 
-def test_bridged_models_for_phase2_inventory():
-    """Today's FLEET = 1 Coyote at instance 1 + 3 Anvils at instance 2..4
-    → bridged_models = (('coyote', 1), ('interceptor', 4))."""
-    assert bridged_models() == (('coyote', 1), ('interceptor', 4))
+def test_bridged_models_for_phase3_inventory():
+    """Phase 3 FLEET = 1 Coyote (gz instance 1) + 1 DroneHunter (gz instance 1)
+    + 2 Anvils (gz instances 2 and 4) → bridged_models returns the max instance
+    index per kind, sorted alphabetically."""
+    assert bridged_models() == (('coyote', 1), ('dronehunter', 1), ('interceptor', 4))

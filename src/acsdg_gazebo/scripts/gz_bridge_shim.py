@@ -62,7 +62,7 @@ except ImportError:
         "If FLEET has added weapons (DroneHunter F700, Skyranger 30), some models will "
         "not be bridged. Check launch order / PYTHONPATH.",
         RuntimeWarning, stacklevel=2)
-    _INTERCEPTOR_MODELS = (('coyote', 1), ('interceptor', 4))
+    _INTERCEPTOR_MODELS = (('coyote', 1), ('dronehunter', 1), ('interceptor', 4))
 
 _BRIDGED_MODELS = (('enemy', NUM_ENEMIES),) + _INTERCEPTOR_MODELS
 
