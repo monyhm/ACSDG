@@ -34,7 +34,8 @@ public:
                        const std::string & topic_prefix,
                        double max_speed_mps,
                        double kill_radius_inner_m,
-                       double kill_radius_outer_m = 0.0);
+                       double kill_radius_outer_m = 0.0,
+                       const std::string & gz_model_kind = "");
 
 protected:
   // ── Virtuals (subclasses MUST override) ──────────────────────────────

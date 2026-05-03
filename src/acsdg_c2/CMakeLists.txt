@@ -17,7 +17,6 @@ find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(builtin_interfaces REQUIRED)
-find_package(mavros_msgs REQUIRED)
 
 # ── Python package (installs acsdg_c2/ to site-packages for imports) ─────
 ament_python_install_package(${PROJECT_NAME})

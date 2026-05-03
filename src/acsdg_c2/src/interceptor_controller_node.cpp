@@ -25,7 +25,9 @@ class AnvilControllerNode : public acsdg_c2::WeaponControllerBase
 public:
   AnvilControllerNode()
     : WeaponControllerBase("interceptor_controller_node", "/interceptor_",
-                           kMaxSpeed, kKillRadius)
+                           kMaxSpeed, kKillRadius,
+                           /*kill_radius_outer_m=*/0.0,
+                           /*gz_model_kind=*/"interceptor")
   {
     RCLCPP_INFO(get_logger(),
       "InterceptorController #%d  home=(%.0f, %.0f, %.0f)  max_speed=%.0fm/s",

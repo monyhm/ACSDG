@@ -16,7 +16,8 @@ WeaponControllerBase::WeaponControllerBase(const std::string & node_name,
                                            const std::string & topic_prefix,
                                            double max_speed_mps,
                                            double kill_radius_inner_m,
-                                           double kill_radius_outer_m)
+                                           double kill_radius_outer_m,
+                                           const std::string & gz_model_kind)
   : rclcpp::Node(node_name),
     max_speed_(max_speed_mps),
     kill_radius_inner_(kill_radius_inner_m),
@@ -46,13 +47,16 @@ WeaponControllerBase::WeaponControllerBase(const std::string & node_name,
     "/c2/engagement_orders", 10,
     [this](acsdg_msgs::msg::EngagementOrder::SharedPtr msg) { onOrder(msg); });
 
-  // odometry topic uses /model/{kind}_{id}/odometry; the kind comes from the
-  // topic prefix without leading slash and trailing '_'. e.g. "/coyote_" → "coyote".
-  std::string kind = topic_prefix_;
-  if (!kind.empty() && kind.front() == '/') kind.erase(0, 1);
-  if (!kind.empty() && kind.back() == '_') kind.pop_back();
-  // Anvils use the legacy "interceptor" gz model name regardless of topic prefix.
-  // Each subclass passes its own prefix so the mapping is uniform.
+  // Resolve gz model kind: explicit override wins; otherwise derive from
+  // topic_prefix by stripping leading '/' and trailing '_'. The explicit
+  // override is the recommended form going forward — string surgery is a
+  // fallback for back-compat with weapons that haven't been updated.
+  std::string kind = gz_model_kind;
+  if (kind.empty()) {
+    kind = topic_prefix_;
+    if (!kind.empty() && kind.front() == '/') kind.erase(0, 1);
+    if (!kind.empty() && kind.back() == '_') kind.pop_back();
+  }
   const std::string odom_topic = "/model/" + kind + "_" + std::to_string(id_) + "/odometry";
   odom_sub_ = create_subscription<nav_msgs::msg::Odometry>(
     odom_topic, rclcpp::QoS(10),
