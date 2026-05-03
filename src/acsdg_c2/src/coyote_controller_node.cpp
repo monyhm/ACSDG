@@ -11,24 +11,36 @@
 #include "acsdg_c2/weapon_controller_base.hpp"
 
 #include <cmath>
+#include <random>
 #include <sstream>
 
 class CoyoteControllerNode : public acsdg_c2::WeaponControllerBase
 {
   // Coyote spec values (spec §6.2)
-  static constexpr double kMaxSpeed     = 160.0;  // m/s — Mach 0.45 sustained
-  static constexpr double kKillRadius   = 5.0;    // m — frag p≥0.5 (binary today; Task 10 adds p30 ring)
+  static constexpr double kMaxSpeed         = 160.0;  // m/s
+  static constexpr double kKillRadiusInner  = 5.0;    // m — frag p≥0.5 guaranteed kill
+  static constexpr double kKillRadiusOuter  = 8.0;    // m — frag p≥0.3 probabilistic
 
 public:
   CoyoteControllerNode()
     : WeaponControllerBase("coyote_controller_node", "/coyote_",
-                           kMaxSpeed, kKillRadius,
-                           /*kill_radius_outer_m=*/0.0,
-                           /*gz_model_kind=*/"coyote")
+                           kMaxSpeed, kKillRadiusInner, kKillRadiusOuter,
+                           /*gz_model_kind=*/"coyote"),
+      uniform_(0.0, 1.0)
   {
+    declare_parameter("pkill_small_quad", 0.60);
+    declare_parameter("rng_seed", -1);
+    pkill_small_quad_ = get_parameter("pkill_small_quad").as_double();
+    const int seed_param = get_parameter("rng_seed").as_int();
+    const unsigned int seed = (seed_param < 0)
+        ? std::random_device{}()
+        : static_cast<unsigned int>(seed_param);
+    rng_.seed(seed);
+
     RCLCPP_INFO(get_logger(),
-      "CoyoteController #%d  home=(%.0f, %.0f, %.0f)  max_speed=%.0fm/s",
-      id_, home_x_, home_y_, home_z_, kMaxSpeed);
+      "CoyoteController #%d  home=(%.0f, %.0f, %.0f)  max_speed=%.0fm/s  "
+      "pkill_sq=%.2f  rng_seed=%u",
+      id_, home_x_, home_y_, home_z_, kMaxSpeed, pkill_small_quad_, seed);
   }
 
 protected:
@@ -58,13 +70,33 @@ protected:
 
   std::string onKill(double range_m) override
   {
+    if (range_m < kKillRadiusInner) {
+      // Inner ring (range < 5 m): guaranteed kill, p50 spec band.
+      RCLCPP_INFO(get_logger(),
+        "Coyote #%d: NEUTRALISED target #%d at range=%.2fm "
+        "[FRAG-FUZE p50] coy(%.1f,%.1f,%.1f) tgt(%.1f,%.1f,%.1f)",
+        id_, target_id_, range_m,
+        pos_x_, pos_y_, pos_z_, tgt_x_, tgt_y_, tgt_z_);
+      return "NEUTRALIZED";
+    }
+
+    // Outer ring (5 m ≤ range < 8 m): probabilistic kill governed by Pkill table.
+    const double roll = uniform_(rng_);
+    const bool killed = (roll <= pkill_small_quad_);
+    const char * tag = killed ? "[FRAG-FUZE p30]" : "[FRAG-FUZE MISS]";
     RCLCPP_INFO(get_logger(),
-      "Coyote #%d: NEUTRALISED target #%d at range=%.2fm "
-      "[FRAG-FUZE] coy(%.1f,%.1f,%.1f) tgt(%.1f,%.1f,%.1f)",
-      id_, target_id_, range_m,
-      pos_x_, pos_y_, pos_z_, tgt_x_, tgt_y_, tgt_z_);
-    return "NEUTRALIZED";
+      "Coyote #%d frag roll=%.3f vs pkill=%.3f at range=%.2fm → %s",
+      id_, roll, pkill_small_quad_, range_m, killed ? "KILL" : "MISS");
+    RCLCPP_INFO(get_logger(),
+      "Coyote #%d: %s target #%d at range=%.2fm %s",
+      id_, killed ? "NEUTRALISED" : "MISSED", target_id_, range_m, tag);
+    return killed ? "NEUTRALIZED" : "MISS";
   }
+
+private:
+  double pkill_small_quad_{0.60};
+  std::mt19937 rng_;
+  std::uniform_real_distribution<double> uniform_;
 };
 
 int main(int argc, char * argv[])
