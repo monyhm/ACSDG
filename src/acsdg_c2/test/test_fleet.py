@@ -55,3 +55,62 @@ def test_fleet_uniqueness_validator_rejects_duplicate_home():
 def test_fleet_validator_accepts_valid_fleet():
     """The shipping FLEET must pass validation (sanity check)."""
     _validate_fleet(FLEET)  # raises on failure
+
+
+from pathlib import Path
+
+from acsdg_c2.fleet import assert_matches_sdf, parse_sdf_includes
+
+
+def _real_sdf_path() -> Path:
+    # Test runs from the workspace root (colcon test) or from the package
+    # root (direct pytest). Walk up until we find acsdg_gazebo.
+    here = Path(__file__).resolve()
+    for parent in (here, *here.parents):
+        candidate = parent / "src" / "acsdg_gazebo" / "worlds" / "military_base.sdf"
+        if candidate.is_file():
+            return candidate
+        candidate = parent / "acsdg_gazebo" / "worlds" / "military_base.sdf"
+        if candidate.is_file():
+            return candidate
+    raise FileNotFoundError("Could not locate military_base.sdf from test working dir")
+
+
+def test_parse_sdf_includes_returns_model_to_pose_dict():
+    sdf = _real_sdf_path()
+    poses = parse_sdf_includes(str(sdf))
+    # Every FLEET model name must appear in the parsed SDF
+    for slot in FLEET:
+        name = f"{slot.gz_model_kind}_{slot.gz_instance_index}"
+        assert name in poses, f"{name} not found in SDF includes"
+    # Pose tuples are (x, y, z)
+    for name, xyz in poses.items():
+        assert isinstance(xyz, tuple) and len(xyz) == 3
+        for v in xyz:
+            assert isinstance(v, float)
+
+
+def test_fleet_matches_sdf_spawn_poses():
+    """Every slot's home must match the SDF's <include><pose> for that model name."""
+    assert_matches_sdf(str(_real_sdf_path()))   # raises on disagreement
+
+
+def test_assert_matches_sdf_raises_on_disagreement(tmp_path):
+    """Synthetic SDF with a wrong pose must fail the assertion."""
+    bad_sdf = tmp_path / "bad.sdf"
+    bad_sdf.write_text(
+        '<?xml version="1.0"?>\n'
+        '<sdf version="1.9"><world name="w">\n'
+        '  <include><name>coyote_1</name>'
+        '    <pose>0 0 0 0 0 0</pose>'  # wrong; FLEET says (177,177,20)
+        '    <uri>foo</uri></include>\n'
+        '  <include><name>interceptor_2</name>'
+        '    <pose>-177 177 20 0 0 0</pose><uri>foo</uri></include>\n'
+        '  <include><name>interceptor_3</name>'
+        '    <pose>177 -177 20 0 0 0</pose><uri>foo</uri></include>\n'
+        '  <include><name>interceptor_4</name>'
+        '    <pose>-177 -177 20 0 0 0</pose><uri>foo</uri></include>\n'
+        '</world></sdf>\n'
+    )
+    with pytest.raises(AssertionError, match="coyote_1"):
+        assert_matches_sdf(str(bad_sdf))

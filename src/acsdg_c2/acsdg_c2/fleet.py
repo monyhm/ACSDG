@@ -61,3 +61,58 @@ FLEET: Tuple[Slot, ...] = (
 
 
 _validate_fleet(FLEET)   # runs at import; fails fast on misconfiguration
+
+
+import xml.etree.ElementTree as ET
+from typing import Dict
+
+
+def parse_sdf_includes(sdf_path: str) -> Dict[str, Tuple[float, float, float]]:
+    """Walk an SDF world file and return {model_name: (x, y, z)} for every <include>.
+
+    Pose strings are six floats 'x y z roll pitch yaw'; we keep only x, y, z.
+    Returns an empty dict if no <include> blocks are present.
+    """
+    tree = ET.parse(sdf_path)
+    root = tree.getroot()
+    out: Dict[str, Tuple[float, float, float]] = {}
+    # SDF doesn't use namespaces in our worlds; iterate any descendant <include>.
+    for inc in root.iter("include"):
+        name_el = inc.find("name")
+        pose_el = inc.find("pose")
+        if name_el is None or pose_el is None:
+            continue
+        name = (name_el.text or "").strip()
+        if not name:
+            continue
+        pose_text = (pose_el.text or "").strip()
+        parts = pose_text.split()
+        if len(parts) < 3:
+            continue
+        try:
+            xyz = (float(parts[0]), float(parts[1]), float(parts[2]))
+        except ValueError:
+            continue
+        out[name] = xyz
+    return out
+
+
+def assert_matches_sdf(sdf_path: str, abs_tol: float = 0.01) -> None:
+    """Raise AssertionError if any FLEET.home disagrees with the SDF spawn pose
+    for the same model name.
+
+    Called at c2_engine_node startup (defense in depth) and in the regression
+    test (CI catches divergence before launch). Tolerance is 0.01 m absolute.
+    """
+    poses = parse_sdf_includes(sdf_path)
+    for slot in FLEET:
+        name = f"{slot.gz_model_kind}_{slot.gz_instance_index}"
+        assert name in poses, (
+            f"FLEET slot {slot.weapon_id!r} expects SDF spawn for {name!r}, "
+            f"but no <include> with that name was found in {sdf_path}")
+        sx, sy, sz = poses[name]
+        hx, hy, hz = slot.home
+        for axis, sv, hv in (("x", sx, hx), ("y", sy, hy), ("z", sz, hz)):
+            assert abs(sv - hv) <= abs_tol, (
+                f"{name}: SDF.{axis}={sv} disagrees with FLEET.home.{axis}={hv} "
+                f"(slot weapon_id={slot.weapon_id!r}, tol={abs_tol}m)")
