@@ -50,11 +50,18 @@ from bridge_math import world_to_body_velocity
 NUM_ENEMIES = 4
 
 try:
-    from acsdg_c2.fleet import bridged_models as _fleet_bridged_models
+    from acsdg_c2.fleet import bridged_models as _fleet_bridged_models  # returns (kind, MAX index)
     _INTERCEPTOR_MODELS = _fleet_bridged_models()
 except ImportError:
     # acsdg_c2 may not be on PYTHONPATH during early bridge bringup. Fall back
-    # to the Phase 2 hand-coded list so the bridge still works.
+    # to the Phase 2 hand-coded list so the bridge still works — but warn loudly,
+    # because this list is stale every time FLEET adds a weapon class.
+    import warnings
+    warnings.warn(
+        "gz_bridge_shim: acsdg_c2.fleet not importable — using stale Phase-2 fallback. "
+        "If FLEET has added weapons (DroneHunter F700, Skyranger 30), some models will "
+        "not be bridged. Check launch order / PYTHONPATH.",
+        RuntimeWarning, stacklevel=2)
     _INTERCEPTOR_MODELS = (('coyote', 1), ('interceptor', 4))
 
 _BRIDGED_MODELS = (('enemy', NUM_ENEMIES),) + _INTERCEPTOR_MODELS
