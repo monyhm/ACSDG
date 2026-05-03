@@ -5,13 +5,16 @@ Per-slot weapon selection comes from acsdg_c2.fleet.FLEET — single source of
 truth for which weapon class occupies which post. Adding a weapon (Phase 3
 DroneHunter, Phase 4 Skyranger) means appending one Slot to FLEET. No code
 change here.
+
+Per-class controller parameters (e.g. Coyote's frag-fuze pkill + RNG seed)
+live on each weapon class via WeaponSystem.launch_parameters() — this file
+stays free of per-class `if/elif` ladders.
 """
 
 from launch import LaunchDescription
 from launch_ros.actions import Node
 
 from acsdg_c2.fleet import FLEET
-from acsdg_c2.weapons.types import TargetClass
 
 
 def generate_launch_description() -> LaunchDescription:
@@ -26,8 +29,9 @@ def generate_launch_description() -> LaunchDescription:
     ]
 
     for slot in FLEET:
-        # Build a per-slot template so we can pull pkill values for parameters.
-        # The template instance is throw-away; the real weapon objects live in
+        # Build a per-slot template so we can pull per-class launch parameters
+        # (Coyote: pkill_small_quad + rng_seed; Anvil: none). The template
+        # instance is throw-away; the real weapon objects live in
         # c2_engine_node._weapons (also built from FLEET).
         template = slot.weapon_class(weapon_id=slot.weapon_id, home_position=slot.home)
         parameters: list[dict] = [
@@ -36,11 +40,7 @@ def generate_launch_description() -> LaunchDescription:
             {'home_y': slot.home[1]},
             {'home_z': slot.home[2]},
         ]
-        # Coyote needs frag-fuze pkill + RNG seed parameters. Other weapons may
-        # add their own per-class parameters here in future phases.
-        if slot.weapon_class.__name__ == 'Coyote':
-            parameters.append({'pkill_small_quad': template.pkill(TargetClass.SMALL_QUAD)})
-            parameters.append({'rng_seed': -1})  # production: cryptographic seed
+        parameters += template.launch_parameters()   # per-class additions
 
         nodes.append(Node(
             package='acsdg_c2',

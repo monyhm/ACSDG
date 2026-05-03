@@ -73,3 +73,18 @@ class WeaponSystem(ABC):
         multi-shot weapons (Skyranger, DroneHunter post-recovery) Phase 4
         will need richer semantics — see Phase 2 plan TODOs.
         """
+
+    # ── Launch-time hooks ────────────────────────────────────────────────
+
+    def launch_parameters(self) -> list[dict]:
+        """Per-instance ROS parameters this weapon's controller needs at launch.
+
+        Default: no extra parameters beyond the standard interceptor_id +
+        home_x/y/z that every controller receives. Override in subclasses
+        (e.g., Coyote needs pkill_small_quad + rng_seed for the frag-fuze).
+
+        Concrete method, not abstract — subclasses inherit `[]` unless they
+        have per-class launch needs. This keeps c2.launch.py free of
+        per-class `if/elif` ladders as new weapons are added.
+        """
+        return []

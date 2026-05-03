@@ -133,3 +133,17 @@ class Coyote(WeaponSystem):
             available=self.is_available(),
             ammo_remaining=None,    # Coyote is one-shot, like Anvil
         )
+
+    # ── Launch-time hooks ───────────────────────────────────────────────
+
+    def launch_parameters(self) -> list[dict]:
+        """Coyote needs frag-fuze pkill (sourced from the Pkill table) + RNG seed.
+
+        The C++ coyote_controller_node consumes `pkill_small_quad` to gate
+        the proximity-fuze decision and `rng_seed` (-1 in production →
+        cryptographic seed; tests pin to a deterministic int).
+        """
+        return [
+            {'pkill_small_quad': self.pkill(TargetClass.SMALL_QUAD)},
+            {'rng_seed': -1},   # production: cryptographic seed; test mode overrides
+        ]
