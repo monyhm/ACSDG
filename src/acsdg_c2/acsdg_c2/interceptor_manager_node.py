@@ -25,14 +25,12 @@ from geometry_msgs.msg import Point
 from std_msgs.msg import String
 from acsdg_msgs.msg import EngagementOrder, InterceptorState
 
+from acsdg_c2.fleet import FLEET
+
 # ── Fleet configuration ───────────────────────────────────────────────────
-# Home positions: four corners of a 400 m × 400 m square, 20 m AGL
-HOME: dict = {
-    1: (  200.0,  200.0, 20.0),
-    2: ( -200.0,  200.0, 20.0),
-    3: (  200.0, -200.0, 20.0),
-    4: ( -200.0, -200.0, 20.0),
-}
+# Home positions sourced from FLEET — single source of truth across launch,
+# bridge, c2_engine, and this manager. See acsdg_c2/fleet.py.
+HOME: dict = {slot.interceptor_id: slot.home for slot in FLEET}
 
 
 class InterceptorManagerNode(Node):
