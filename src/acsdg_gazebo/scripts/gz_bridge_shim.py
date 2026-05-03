@@ -43,24 +43,21 @@ from gz.msgs10.odometry_pb2 import Odometry as GzOdometry
 from bridge_math import world_to_body_velocity
 
 
-# Models bridged on cmd_vel + odometry, as (kind, count) tuples. The bridge
-# wires `/{kind}_{1..count}/cmd_vel` (ROS) ↔ `/model/{kind}_{i}/cmd_vel` (gz)
-# for every kind. Phase 1 had only enemy + interceptor; Phase 2 replaces
-# interceptor_1 with coyote_1 at the NE post.
-#
-# interceptor stays at count=4 (not 3) because the table is `count`-based,
-# not instance-list-based. Dropping to 3 would mis-wire the SURVIVING
-# interceptors at slots 2..4 (the loop walks range(1, count+1), so count=3
-# would wire instances 1,2,3 instead of 2,3,4). Keeping count=4 wires a
-# stale slot for instance 1, which is harmless: gz transport advertise/
-# subscribe on a topic with no peers just keeps an unused slot — no error,
-# no warning, no resource leak. If a future call site moves to explicit
-# instance lists `('interceptor', (2, 3, 4))` we can drop it then.
-_BRIDGED_MODELS = (
-    ('enemy',       4),    # enemy_1..4 — Anvils' targets
-    ('interceptor', 4),    # interceptor_1..4 — slot 1 unused after Phase 2 (see note above)
-    ('coyote',      1),    # coyote_1 — new in Phase 2 at slot 1 (NE post)
-)
+# Models bridged on cmd_vel + odometry. Enemies are not in FLEET (they're targets,
+# not interceptors), so they stay declared inline. Interceptor-class models come
+# from acsdg_c2.fleet.bridged_models() — single source of truth across launch,
+# bridge, c2_engine.
+NUM_ENEMIES = 4
+
+try:
+    from acsdg_c2.fleet import bridged_models as _fleet_bridged_models
+    _INTERCEPTOR_MODELS = _fleet_bridged_models()
+except ImportError:
+    # acsdg_c2 may not be on PYTHONPATH during early bridge bringup. Fall back
+    # to the Phase 2 hand-coded list so the bridge still works.
+    _INTERCEPTOR_MODELS = (('coyote', 1), ('interceptor', 4))
+
+_BRIDGED_MODELS = (('enemy', NUM_ENEMIES),) + _INTERCEPTOR_MODELS
 
 
 class BridgeShim(Node):
