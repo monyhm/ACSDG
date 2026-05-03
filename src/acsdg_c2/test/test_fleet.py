@@ -1,7 +1,8 @@
 """Regression tests for the FLEET single-source-of-truth module."""
 import pytest
+from pathlib import Path
 
-from acsdg_c2.fleet import FLEET, Slot, _validate_fleet
+from acsdg_c2.fleet import FLEET, Slot, _validate_fleet, assert_matches_sdf, parse_sdf_includes
 from acsdg_c2.weapons import Anvil
 
 
@@ -55,11 +56,6 @@ def test_fleet_uniqueness_validator_rejects_duplicate_home():
 def test_fleet_validator_accepts_valid_fleet():
     """The shipping FLEET must pass validation (sanity check)."""
     _validate_fleet(FLEET)  # raises on failure
-
-
-from pathlib import Path
-
-from acsdg_c2.fleet import assert_matches_sdf, parse_sdf_includes
 
 
 def _real_sdf_path() -> Path:

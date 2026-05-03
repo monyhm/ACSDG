@@ -9,8 +9,9 @@ Consumers:
 Adding a weapon: append one Slot. Validator + SDF-agreement test gate the add.
 """
 
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass
-from typing import Tuple, Type
+from typing import Dict, Tuple, Type
 
 from acsdg_c2.weapons import Anvil, Coyote, WeaponSystem
 
@@ -61,10 +62,6 @@ FLEET: Tuple[Slot, ...] = (
 
 
 _validate_fleet(FLEET)   # runs at import; fails fast on misconfiguration
-
-
-import xml.etree.ElementTree as ET
-from typing import Dict
 
 
 def parse_sdf_includes(sdf_path: str) -> Dict[str, Tuple[float, float, float]]:
