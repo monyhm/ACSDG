@@ -57,6 +57,13 @@ ament_target_dependencies(coyote_controller_node
   rclcpp acsdg_msgs geometry_msgs nav_msgs std_msgs builtin_interfaces
 )
 
+# ── C++ node: dronehunter_controller_node ────────────────────────────────
+add_executable(dronehunter_controller_node src/dronehunter_controller_node.cpp)
+target_link_libraries(dronehunter_controller_node weapon_controller_base)
+ament_target_dependencies(dronehunter_controller_node
+  rclcpp acsdg_msgs geometry_msgs nav_msgs std_msgs builtin_interfaces
+)
+
 # ── Install ──────────────────────────────────────────────────────────────
 install(DIRECTORY include/
   DESTINATION include
@@ -70,7 +77,7 @@ install(TARGETS weapon_controller_base
   INCLUDES DESTINATION include
 )
 
-install(TARGETS interceptor_controller_node coyote_controller_node
+install(TARGETS interceptor_controller_node coyote_controller_node dronehunter_controller_node
   DESTINATION lib/${PROJECT_NAME})
 
 # ── Launch files ─────────────────────────────────────────────────────────
