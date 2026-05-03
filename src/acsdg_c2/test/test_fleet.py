@@ -58,6 +58,19 @@ def test_fleet_validator_accepts_valid_fleet():
     _validate_fleet(FLEET)  # raises on failure
 
 
+def test_fleet_validator_rejects_gz_instance_index_interceptor_id_mismatch():
+    """Phase 3 Task 7 regression: WeaponControllerBase derives topic names from
+    interceptor_id but Gazebo model name uses gz_instance_index. If they
+    diverge, the controller wires to non-existent topics. Caught the hard way
+    when DroneHunter was added with gz_instance_index=1 vs interceptor_id=3
+    and never engaged its target (BREACH). Validator now enforces equality."""
+    bad = (
+        Slot(1, Anvil, "anvil_X", "anvil_node", "interceptor", 99, (0.0, 0.0, 20.0)),
+    )
+    with pytest.raises(ValueError, match="gz_instance_index=99"):
+        _validate_fleet(bad)
+
+
 def _real_sdf_path() -> Path:
     # Test runs from the workspace root (colcon test) or from the package
     # root (direct pytest). Walk up until we find acsdg_gazebo.

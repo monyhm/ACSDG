@@ -51,6 +51,23 @@ def _validate_fleet(fleet: Tuple[Slot, ...]) -> None:
         seen_weapon_ids.add(s.weapon_id)
         seen_gz.add(gz_key)
         seen_homes.add(s.home)
+    # WeaponControllerBase derives topic names from id_ (interceptor_id),
+    # but the Gazebo model name is gz_model_kind_<gz_instance_index>. If
+    # these diverge, the controller publishes/subscribes to non-existent
+    # topics with no error — body never gets odometry, never engages.
+    # Caught the hard way in Phase 3 Task 7 (commit 8973be7e).
+    # Run after the duplicate checks so unrelated test fixtures (which may
+    # use mismatched indices to exercise the duplicate paths) still trigger
+    # those errors first.
+    for s in fleet:
+        if s.gz_instance_index != s.interceptor_id:
+            raise ValueError(
+                f"FLEET: slot weapon_id={s.weapon_id!r} has "
+                f"gz_instance_index={s.gz_instance_index} != "
+                f"interceptor_id={s.interceptor_id}. The WeaponControllerBase "
+                f"derives /<kind>_<id>/cmd_vel and /model/<kind>_<id>/odometry "
+                f"from interceptor_id, so the Gazebo model name (which uses "
+                f"gz_instance_index) must match.")
 
 
 FLEET: Tuple[Slot, ...] = (
