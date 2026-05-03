@@ -1,18 +1,18 @@
 //============================================================================
 // coyote_controller_node.cpp -- Raytheon Coyote Block 2 frag-jet controller.
 //
-// Phase 3 prep refactor: extends acsdg_c2::WeaponControllerBase. The 20% of
-// behaviour unique to the Coyote — 3D proportional pursuit (no altitude hold)
-// and the [FRAG-FUZE] kill log — lives in computePursuitCmd / onKill. The
-// 5–8 m probabilistic frag-fuze ring lands in Task 10; this task preserves
-// the binary 5 m kill from Phase 2.
+// Extends acsdg_c2::WeaponControllerBase. Coyote-specific behaviour lives in
+// the two virtuals: computePursuitCmd (3D proportional pursuit, no altitude
+// hold — Coyote at 160 m/s closes engagements in 5–10 s, so the radar-noise
+// window on tgt_vz is too short to diverge over t_go) and onKill (frag-fuze
+// kill bands per spec §6.2: guaranteed kill within kKillRadiusInner=5 m
+// (p50 ring), probabilistic kill in 5–8 m (p30 ring) governed by Pkill table).
 //============================================================================
 
 #include "acsdg_c2/weapon_controller_base.hpp"
 
 #include <cmath>
 #include <random>
-#include <sstream>
 
 class CoyoteControllerNode : public acsdg_c2::WeaponControllerBase
 {
@@ -31,6 +31,7 @@ public:
     declare_parameter("pkill_small_quad", 0.60);
     declare_parameter("rng_seed", -1);
     pkill_small_quad_ = get_parameter("pkill_small_quad").as_double();
+    // rng_seed: -1 = entropy via std::random_device (production); >=0 = deterministic seed (test/replay)
     const int seed_param = get_parameter("rng_seed").as_int();
     const unsigned int seed = (seed_param < 0)
         ? std::random_device{}()
