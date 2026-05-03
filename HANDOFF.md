@@ -159,6 +159,34 @@ End-of-session live verification: 4 interceptors NEUTRALISED 4 enemies at ranges
 
 **Final code review fix landed.** Phase 3 prep final reviewer flagged 0 critical, 3 important, 5 nits across the 20-commit prep delta. **I-3 (interceptor_manager_node.HOME quadruplicated)** was identified as the only blocker for clean prep merge — it kept hard-coding the wrong `(±200, ±200, 20)` homes despite the prep's headline goal of "single source of truth for fleet composition." Fixed at commit `17dedd76`: `HOME = {s.interceptor_id: s.home for s in FLEET}` — fourth consumer now reads from FLEET. **I-1 (FLEET home-uniqueness too strict for Phase-4 turret co-location)** and **I-2 (gz_bridge_shim ImportError fallback emits warnings.warn but not via ROS log)** are non-blocking — left as Phase-3-proper follow-ups.
 
+## What changed in session 2026-05-03 (continued) — Phase 3 (DroneHunter F700)
+
+**Phase 3 proper** lands the third weapon class — the Fortem DroneHunter F700 net-capture octocopter. Spec at `docs/superpowers/specs/2026-05-03-phase3-dronehunter-design.md`, plan at `docs/superpowers/plans/2026-05-03-phase3-dronehunter.md`.
+
+1. **Dispatcher routing fix** (`src/acsdg_c2/acsdg_c2/dispatcher/dispatcher.py`). Phase 1's numeric-tail `weapon_id → interceptor_id` heuristic (`int(wid.split("_")[-1]) + 1`) was replaced with a FLEET-driven lookup. The old logic would have routed `dronehunter_0` to `interceptor_id=1`, colliding with Coyote. New form: `next(s.interceptor_id for s in FLEET if s.weapon_id == wid)` raising `ValueError` if the weapon_id isn't registered. Closes the deferred "explicit weapon_id→interceptor_id registry" item from prep.
+
+2. **DroneHunter Python class** (`src/acsdg_c2/acsdg_c2/weapons/dronehunter.py`). Concrete `WeaponSystem` subclass — max_speed=31 m/s (post-2024 doubled-speed update), kill_radius=15 m (net-deploy range), max_range=2 km, resource_cost=0.20, relaunch_time=180 s. Pkill table: SMALL_QUAD=0.85, GROUP_1_FIXED_WING=0.70, GROUP_3_LOITERING=0.50, SHAHED_CLASS=0.40 (net entanglement, no recovery above 25 kg target mass). The 180 s multi-shot cooldown is enforced via `is_available()` and `mark_idle()` overrides — Python-only, no message-schema or C++ changes. The `was_engaged` guard in `mark_idle()` prevents the cooldown from resetting on every IDLE tick at 10 Hz.
+
+3. **DroneHunter C++ controller** (`src/acsdg_c2/src/dronehunter_controller_node.cpp`). ~85-line subclass of `WeaponControllerBase`. 2D pursuit + altitude hold (Anvil pattern) since DroneHunter's 31 m/s closes typical engagements in ~30 s — long enough that 3D pursuit would amplify radar-noisy `tgt_vz` over t_go. Binary kill at 15 m with `[NET-CAPTURE]` log tag.
+
+4. **DroneHunter SDF model** (`src/acsdg_gazebo/models/dronehunter_f700/`). Octocopter form, 18 kg cylindrical body, 8 cosmetic rotor stubs at 45° intervals. Uses `gz-sim-velocity-control-system` + 3D `OdometryPublisher` (same plugin set as Anvil/Coyote).
+
+5. **FLEET update.** Slot 3 (SE post at 177, -177, 20) now hosts DroneHunter (`weapon_id="dronehunter_0"`, `gz_model_kind="dronehunter"`, `gz_instance_index=3`). Slot 4 keeps `anvil_3` for naming stability. Inventory: 1 Coyote (NE) + 2 Anvil (NW + SW) + 1 DroneHunter (SE). **Critical: gz_instance_index=3 (not 1) so the WeaponControllerBase's id_-based topic naming (`/dronehunter_<id>/cmd_vel`, `/model/dronehunter_<id>/odometry`) resolves correctly.** The first attempt with gz_instance_index=1 caused a topic mismatch where the controller published to `/dronehunter_3/cmd_vel` while Gazebo only had `/model/dronehunter_1/...`, leaving DroneHunter without odometry → never engaging → BREACH. Caught during Task 7 live demo and fixed via `8973be7e`.
+
+6. **Tests added.** `test_weapon_dronehunter.py` (8 tests: envelope, Pkill table, resource_cost, ToI closing-rate, ToI clamp for fleeing SHAHED, cooldown-during-engagement, cooldown-clears-after-180s with `monkeypatch`, idle-tick-doesn't-reset-cooldown). `test_dronehunter_integration.py` (2 tests: dispatch routing to interceptor_id=3, cooldown gate after engagement). `test_fleet.py` updated for Phase 3 inventory. `test_dispatcher.py` updated to use weapon_ids that exist in FLEET + new regression test for `dronehunter_0 → 3`. Suite grew from 79 to 91 tests.
+
+**Live verification (after gz_instance_index fix).** 4 NEUTRALISED, 0 BREACHED:
+- Coyote `[FRAG-FUZE p50]` at 1.91 m (inner-ring guaranteed kill)
+- Anvil 2 (NW) at 7.96 m
+- **DroneHunter `[NET-CAPTURE]` at 14.80 m** (within the 15 m net-deploy radius)
+- Anvil 4 (SW) at 7.98 m
+
+DroneHunter's `[NET-CAPTURE]` log tag distinguishes it from Coyote's `[FRAG-FUZE]` and the plain Anvil kills — graders see weapon-class differentiation at a glance.
+
+**Open items still deferred.** Phase 4 (Skyranger 30 + Bayesian classifier hookup), Phase 5 (expected-utility cost function + showcase demo). The pre-existing Python/C++ Anvil max_speed mismatch (Python 45 m/s vs C++ 15 m/s) remains unaddressed. Two flaky integration tests (one Coyote-cooldown-style, one DroneHunter-cooldown — same DDS-discovery race in WSL) — logic correct, harness needs hardening before CI.
+
+**Phase-4 readiness gotcha discovered.** The DroneHunter integration revealed that `WeaponControllerBase` derives all its topic names from `id_` (interceptor_id), but the Gazebo model name is determined by `gz_model_kind` + `gz_instance_index`. When these diverge (as they did in the initial DroneHunter setup with gz_instance_index=1 vs interceptor_id=3), the controller publishes/subscribes to non-existent topics with no error — the body just never gets odometry and silently fails to engage. Mitigation today: enforce `gz_instance_index == interceptor_id` for new weapons. Real fix (Phase 4 prep): change `WeaponControllerBase` to take `gz_instance_index` as a separate ctor param, OR add a FLEET assertion that the two match.
+
 ## Auto-memory checkpoint
 
 The latest checkpoint lives at `~/.claude/projects/-home-mal/memory/project_acsdg_status.md` and reflects this end-of-session state. Future Claude Code sessions in `~/` will load it automatically.
