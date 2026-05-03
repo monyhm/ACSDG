@@ -35,7 +35,7 @@ class SpyNode(Node):
         self._wave_pub = self.create_publisher(Bool, '/mission/wave_trigger', 10)
         self._fused_pub = self.create_publisher(String, '/sensors/fusion/targets', 10)
         self._target_pubs: dict[int, "rclpy.publisher.Publisher"] = {}
-        self._state_pub = self.create_publisher(InterceptorState, '/interceptors/unit_1/state', 10)
+        self._state_pubs: dict[int, "rclpy.publisher.Publisher"] = {}
         self._ack_pub_for_test = self.create_publisher(String, '/mission/engagement_ack', 10)
         self.create_subscription(EngagementOrder, '/c2/engagement_orders', self._on_order, 10)
         self.create_subscription(String, '/mission/engagement_ack', self._on_ack, 10)
@@ -74,13 +74,17 @@ class SpyNode(Node):
         ft.velocity.x = vx; ft.velocity.y = vy; ft.velocity.z = vz
         self._target_pubs[track_id].publish(ft)
 
-    def publish_idle_state(self, x: float, y: float, z: float) -> None:
+    def publish_idle_state(self, x: float, y: float, z: float, *,
+                           interceptor_id: int = 1) -> None:
+        if interceptor_id not in self._state_pubs:
+            self._state_pubs[interceptor_id] = self.create_publisher(
+                InterceptorState, f'/interceptors/unit_{interceptor_id}/state', 10)
         msg = InterceptorState()
-        msg.id = 1
+        msg.id = interceptor_id
         msg.status = "IDLE"
         msg.position.x = x; msg.position.y = y; msg.position.z = z
         msg.target_id = 0
-        self._state_pub.publish(msg)
+        self._state_pubs[interceptor_id].publish(msg)
 
     def publish_ack(self, target_id: int, interceptor_id: int, outcome: str) -> None:
         """Publish a synthetic ack as the controller would after an engagement."""
@@ -170,6 +174,14 @@ def test_c2_handles_miss_ack_without_crashing(harness):
     spy.wait_for_order(timeout_s=3.0)
     # Manually publish a MISS ack as the controller would
     spy.publish_ack(target_id=2, interceptor_id=1, outcome="MISS")
+    # Phase-1 contract: the slot frees on the next IDLE state from that unit.
+    # Publish IDLE so C2 marks unit_1 available before the second target arrives.
+    spy.publish_idle_state(177.0, 177.0, 20.0, interceptor_id=1)
+    # Retire track 2 (missed) so the cost matrix only sees the new threat.
+    # Without this, C2 would re-assign the now-available Coyote to track 2
+    # again (lowest cost) and give track 3 to an Anvil instead.
+    spy.publish_target(track_id=2, x=_TARGET_POS[0], y=_TARGET_POS[1], z=_TARGET_POS[2],
+                       state="TERMINATED")
     # If C2 crashes on MISS handling, the executor thread dies and subsequent
     # publishes get no response. Verify by issuing a second engagement.
     time.sleep(0.5)
@@ -177,3 +189,5 @@ def test_c2_handles_miss_ack_without_crashing(harness):
     spy.publish_target(track_id=3, x=_TARGET_POS[0], y=_TARGET_POS[1], z=_TARGET_POS[2])
     second = spy.wait_for_order(timeout_s=3.0)
     assert second.target_id == 3
+    assert second.interceptor_id == 1, (
+        f"Expected slot 1 (Coyote) reused after MISS+IDLE, got {second.interceptor_id}")
