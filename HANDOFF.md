@@ -155,6 +155,10 @@ End-of-session live verification: 4 interceptors NEUTRALISED 4 enemies at ranges
 
 **Open items still deferred.** DroneHunter F700, Skyranger 30, Bayesian classifier hookup, expected-utility cost function, kill-by-other-weapon race, `releaseTarget()` helper, `is_armed(range)` hook, `DispatchOrder` dataclass, multi-shot `is_available`, `WeaponState.engaged_target_id` field. Phase 3 proper picks up DroneHunter and the classifier; Phase 5 swaps the cost function. Also flagged: pre-existing Python/C++ Anvil max_speed mismatch (Python `_ANVIL_MAX_SPEED=45` for cost-matrix vs C++ `kMaxSpeed=15` for pursuit) — needs reconciliation before deeper engagement-physics work.
 
+**Known flake — `test_coyote_integration.py`.** The two integration tests are flaky in WSL: 2/2 fail ~80% of runs (DDS discovery race — c2's order publisher fires before the spy's subscription is matched). The `time.sleep(0.5)` discovery wait in the fixture is borderline; bumping to 1.0–2.0s or replacing with a `wait_for_publishers` poll would close the race. Tests are correct in intent and pass when timing aligns; the test harness needs hardening before CI integration. Tracked as a Phase 3 prep follow-up.
+
+**Final code review fix landed.** Phase 3 prep final reviewer flagged 0 critical, 3 important, 5 nits across the 20-commit prep delta. **I-3 (interceptor_manager_node.HOME quadruplicated)** was identified as the only blocker for clean prep merge — it kept hard-coding the wrong `(±200, ±200, 20)` homes despite the prep's headline goal of "single source of truth for fleet composition." Fixed at commit `17dedd76`: `HOME = {s.interceptor_id: s.home for s in FLEET}` — fourth consumer now reads from FLEET. **I-1 (FLEET home-uniqueness too strict for Phase-4 turret co-location)** and **I-2 (gz_bridge_shim ImportError fallback emits warnings.warn but not via ROS log)** are non-blocking — left as Phase-3-proper follow-ups.
+
 ## Auto-memory checkpoint
 
 The latest checkpoint lives at `~/.claude/projects/-home-mal/memory/project_acsdg_status.md` and reflects this end-of-session state. Future Claude Code sessions in `~/` will load it automatically.
