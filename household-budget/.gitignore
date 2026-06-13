@@ -1,0 +1,13 @@
+# Local config holds your secret + card numbers — never commit it.
+config.json
+
+# Runtime data
+*.db
+budget.db
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
