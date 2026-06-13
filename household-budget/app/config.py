@@ -38,10 +38,40 @@ def load_config(path: str | None = None) -> dict:
         with open(p, "r", encoding="utf-8") as f:
             user_cfg = json.load(f)
         cfg.update(user_cfg)
-    # env override for the secret (handy for deployments)
-    if os.environ.get("WEBHOOK_SECRET"):
-        cfg["webhook_secret"] = os.environ["WEBHOOK_SECRET"]
+    _apply_env_overrides(cfg)
     return cfg
+
+
+def _apply_env_overrides(cfg: dict) -> None:
+    """Let environment variables override config — needed for cloud hosting,
+    where there is no config.json and secrets must not be committed."""
+    env = os.environ
+    if env.get("WEBHOOK_SECRET"):
+        cfg["webhook_secret"] = env["WEBHOOK_SECRET"]
+    if env.get("BUDGET_CURRENCY"):
+        cfg["currency"] = env["BUDGET_CURRENCY"]
+    if env.get("BUDGET_CYCLE_START_DAY"):
+        try:
+            cfg["cycle_start_day"] = int(env["BUDGET_CYCLE_START_DAY"])
+        except ValueError:
+            pass
+    if env.get("BUDGET_DEFAULT_BUDGET"):
+        try:
+            cfg["default_budget"] = float(env["BUDGET_DEFAULT_BUDGET"])
+        except ValueError:
+            pass
+    if env.get("BUDGET_REQUIRE_KNOWN_CARD"):
+        cfg["require_known_card"] = env["BUDGET_REQUIRE_KNOWN_CARD"].lower() in (
+            "1", "true", "yes", "on")
+    # BUDGET_CARDS is a JSON array, e.g.
+    #   [{"name":"Abdulrahman","last4":"1234"},{"name":"Partner","last4":"5678"}]
+    if env.get("BUDGET_CARDS"):
+        try:
+            cards = json.loads(env["BUDGET_CARDS"])
+            if isinstance(cards, list):
+                cfg["cards"] = cards
+        except json.JSONDecodeError:
+            pass
 
 
 def current_period(cycle_start_day: int = 1, today: date | None = None) -> str:

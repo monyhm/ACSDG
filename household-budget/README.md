@@ -42,7 +42,20 @@ accurate, with nothing to log by hand.
 
 ---
 
-## Quick start
+## 📘 Ready-to-use guides
+
+- **[DEPLOY.md](DEPLOY.md)** — one-time server setup (Render / Fly / your own
+  machine). Do this first.
+- **[IPHONE-SETUP.md](IPHONE-SETUP.md)** — the sheet to hand directly to each
+  family member. Both have iPhones → this is the forwarding method to use.
+
+> **Both on iPhone?** iOS can't run a background SMS-forwarder app like Android,
+> but the built-in **Shortcuts → Automation** feature can auto-send each bank
+> SMS for you. `IPHONE-SETUP.md` walks through it tap-by-tap.
+
+---
+
+## Quick start (local / development)
 
 ### 1. Run the server
 
@@ -101,10 +114,9 @@ the shared dashboard.
     (Use whatever placeholder the app provides for the message text — most use
     `%text%`, `{{message}}`, or `%sms_body%`.)
 
-**iPhone:** iOS can't auto-read SMS in the background. Use the **Shortcuts**
-app with a "Get Contents of URL" (POST) action triggered from the share sheet
-or an automation, or simply forward bank alerts via an Android device. (Most
-banks' app push notifications can also be routed on Android.)
+**iPhone:** use **Shortcuts → Automation** (a "Message" trigger that runs a
+"Get Contents of URL" POST). Full tap-by-tap steps are in **[IPHONE-SETUP.md](IPHONE-SETUP.md)**
+— hand that file to each family member.
 
 The server accepts JSON, form-encoded, or query-string posts, and recognises
 common field names (`text`/`message`/`body`/`msg`, `from`/`sender`,

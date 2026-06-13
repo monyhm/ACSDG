@@ -43,7 +43,9 @@ def _check_secret(provided: str | None):
 
 def _summary(period: str) -> dict:
     net_spent, by_person = db.period_totals(period)
-    budget = db.get_budget(period) or 0.0
+    # Use a saved budget if there is one, else fall back to the configured
+    # default so the dashboard shows a real number on first run.
+    budget = db.get_budget(period) or float(config.get("default_budget") or 0)
     remaining = budget - net_spent
     pct = (net_spent / budget * 100.0) if budget > 0 else 0.0
     return {
